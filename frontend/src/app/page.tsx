@@ -90,6 +90,8 @@ const InteractiveSystemMap = dynamic(() => import("../components/InteractiveSyst
 const DefectManagementWorkspace = dynamic(() => import("../components/DefectManagementWorkspace"));
 const QualityReportsWorkspace = dynamic(() => import("../components/QualityReportsWorkspace"));
 const CompleteBuildReportPanel = dynamic(() => import("../components/CompleteBuildReportPanel"));
+const AutonomousAuditsStudio = dynamic(() => import("../components/AutonomousAuditsStudio"));
+const ObservabilityMetricsCard = dynamic(() => import("../components/ObservabilityMetricsCard"));
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 const BRAND_TITLE = process.env.NEXT_PUBLIC_BRAND_TITLE ?? "SkyWatch";
@@ -1430,7 +1432,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     return window.localStorage.getItem("ai-qa-engine:selected-app") ?? "";
   });
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
-  const [agentStudioTab, setAgentStudioTab] = useState<"workspace" | "recommendations">("workspace");
+  const [agentStudioTab, setAgentStudioTab] = useState<"workspace" | "recommendations" | "audits">("workspace");
   const [projectCatalog, setProjectCatalog] = useState<WorkspaceProject[]>(() => {
     const now = new Date().toISOString();
     return [{
@@ -1606,6 +1608,16 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   const [fetchingPlaywrightSpec, setFetchingPlaywrightSpec] = useState(false);
   const [pushingToGit, setPushingToGit] = useState(false);
   const [gitPushMessage, setGitPushMessage] = useState("");
+
+  // Playwright suite export state
+  const [activePlaywrightSuiteModal, setActivePlaywrightSuiteModal] = useState<{
+    application_id: number;
+    application_name: string;
+    total_specs: number;
+    specs: Array<{ test_case_id: number; title: string; filename: string; code: string }>;
+  } | null>(null);
+  const [fetchingPlaywrightSuite, setFetchingPlaywrightSuite] = useState(false);
+  const [selectedSuiteSpecIndex, setSelectedSuiteSpecIndex] = useState(0);
 
   // Background AI generation job tracking across navigation
   const [activeAiJobId, setActiveAiJobId] = useState<string | null>(() => {
@@ -2711,6 +2723,37 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
       notify(msg);
     } finally {
       setPushingToGit(false);
+    }
+  };
+
+  const handleExportPlaywrightSuite = async (applicationId?: number | null) => {
+    if (!token || !applicationId) {
+      notify("Select an application first to export its Playwright test suite");
+      return;
+    }
+    setFetchingPlaywrightSuite(true);
+    try {
+      const res = await apiFetch<{
+        application_id: number;
+        application_name: string;
+        total_specs: number;
+        specs: Array<{ test_case_id: number; title: string; filename: string; code: string }>;
+      }>(
+        `/api/v1/test-cases/application/${applicationId}/export-playwright-suite`,
+        {},
+        token,
+      );
+      if (!res.specs || res.specs.length === 0) {
+        notify("No test cases found for this application to export into Playwright suite.");
+        return;
+      }
+      setSelectedSuiteSpecIndex(0);
+      setActivePlaywrightSuiteModal(res);
+      notify(`Loaded Playwright test suite (${res.total_specs} specs) for ${res.application_name}`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to export Playwright test suite");
+    } finally {
+      setFetchingPlaywrightSuite(false);
     }
   };
 
@@ -5269,7 +5312,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
       let activeConfig = aiConfigState;
       appendAiLog("step", `🔌 Checking backend API connectivity at ${API_URL}...`);
       try {
-        await apiFetch<{ status: string }>("/health", {}, token);
+        await apiFetch<{ status: string }>("/health", { retries: 4, timeoutMs: 10_000 }, token);
       } catch (error) {
         const detail = error instanceof Error ? error.message : "The backend did not respond.";
         throw new Error(`Backend API is unavailable at ${API_URL}. Start the backend on port 8000 and try again. ${detail}`);
@@ -7787,6 +7830,16 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
             </button>
             <button
               type="button"
+              className="secondary"
+              onClick={() => void handleExportPlaywrightSuite(app?.id)}
+              disabled={!hasSelectedApplication || fetchingPlaywrightSuite}
+              title="Export all test cases as compiled TypeScript Playwright test suite (.ts)"
+              style={{ color: "var(--brand-primary, #b5121b)", fontWeight: 700 }}
+            >
+              {fetchingPlaywrightSuite ? "Generating Suite..." : "💻 Playwright Suite"}
+            </button>
+            <button
+              type="button"
               className="secondary btn-danger"
               onClick={() => void clearDraftCases()}
               disabled={!hasSelectedApplication || selectedCases.length === 0 || clearingDrafts}
@@ -8414,6 +8467,148 @@ Example (Markdown Table):
               >
                 <code>{activePlaywrightSpecModal.code}</code>
               </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Playwright Test Suite Modal */}
+      {activePlaywrightSuiteModal && (
+        <div
+          className="projects-modal-overlay"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setActivePlaywrightSuiteModal(null);
+          }}
+        >
+          <div
+            className="panel projects-modal"
+            style={{ maxWidth: "980px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="suite-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="projects-modal-head">
+              <div>
+                <h3 id="suite-modal-title">
+                  TypeScript Playwright Suite · {activePlaywrightSuiteModal.application_name}
+                </h3>
+                <span className="muted">
+                  {activePlaywrightSuiteModal.total_specs} compiled test spec{activePlaywrightSuiteModal.total_specs === 1 ? "" : "s"} ready for execution
+                </span>
+              </div>
+              <button
+                type="button"
+                className="secondary btn-sm"
+                onClick={() => setActivePlaywrightSuiteModal(null)}
+                aria-label="Close suite modal"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              {/* Spec selector tabs */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  overflowX: "auto",
+                  paddingBottom: "6px",
+                  borderBottom: "1px solid rgba(63, 63, 70, 0.4)",
+                }}
+              >
+                {activePlaywrightSuiteModal.specs.map((spec, idx) => (
+                  <button
+                    key={`spec-tab-${spec.test_case_id}`}
+                    type="button"
+                    onClick={() => setSelectedSuiteSpecIndex(idx)}
+                    className={selectedSuiteSpecIndex === idx ? "primary btn-sm" : "secondary btn-sm"}
+                    style={{
+                      whiteSpace: "nowrap",
+                      fontSize: "11px",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {spec.filename}
+                  </button>
+                ))}
+              </div>
+
+              {activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex] && (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                    <div>
+                      <strong style={{ fontSize: "14px" }}>
+                        {activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex].title}
+                      </strong>
+                      <span className="muted" style={{ fontSize: "12px", marginLeft: "8px" }}>
+                        (TC-{activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex].test_case_id})
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        type="button"
+                        className="secondary btn-sm"
+                        onClick={() => {
+                          const currentCode = activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex].code;
+                          void navigator.clipboard.writeText(currentCode);
+                          notify("Active spec copied to clipboard!");
+                        }}
+                      >
+                        📋 Copy Spec
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary btn-sm"
+                        onClick={() => {
+                          const allCode = activePlaywrightSuiteModal.specs
+                            .map((s) => `// ==========================================\n// File: ${s.filename} - ${s.title}\n// ==========================================\n\n${s.code}`)
+                            .join("\n\n");
+                          void navigator.clipboard.writeText(allCode);
+                          notify("Entire suite copied to clipboard!");
+                        }}
+                      >
+                        📦 Copy All ({activePlaywrightSuiteModal.total_specs})
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary btn-sm"
+                        onClick={() => {
+                          const currentSpec = activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex];
+                          const blob = new Blob([currentSpec.code], { type: "text/typescript;charset=utf-8" });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = currentSpec.filename;
+                          link.click();
+                          URL.revokeObjectURL(url);
+                          notify(`Downloaded ${currentSpec.filename}`);
+                        }}
+                      >
+                        💾 Download .spec.ts
+                      </button>
+                    </div>
+                  </div>
+
+                  <pre
+                    style={{
+                      padding: "16px",
+                      background: "#0f172a",
+                      color: "#f8fafc",
+                      borderRadius: "var(--radius-md, 8px)",
+                      fontSize: "12px",
+                      lineHeight: 1.5,
+                      overflowX: "auto",
+                      maxHeight: "440px",
+                      fontFamily: "var(--font-code, monospace)",
+                    }}
+                  >
+                    <code>{activePlaywrightSuiteModal.specs[selectedSuiteSpecIndex].code}</code>
+                  </pre>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -9341,6 +9536,7 @@ Example (Markdown Table):
         onAction={() => { void loadDashboardData(token, app?.name); notify("Report data refreshed"); }}
         actionDisabled={refreshingData}
       />
+      <ObservabilityMetricsCard token={token} appId={app?.id} appName={app?.name} />
       <QualityReportsWorkspace
         appName={app?.name ?? WORKSPACE_NAME}
         application={app}
@@ -10066,6 +10262,16 @@ Example (Markdown Table):
         >
           <span>📋</span> AI Recommendations Board
         </button>
+        <button
+          onClick={() => setAgentStudioTab("audits")}
+          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+            agentStudioTab === "audits"
+              ? "bg-red-600 text-white shadow-md"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+          }`}
+        >
+          <span>🎯</span> Autonomous Audits & Campaigns
+        </button>
       </div>
 
       {agentStudioTab === "workspace" ? (
@@ -10074,7 +10280,7 @@ Example (Markdown Table):
           applications={applications}
           selectedAppId={app?.id}
         />
-      ) : (
+      ) : agentStudioTab === "recommendations" ? (
         <AgentRecommendationsBoard
           appName={app?.name || "Application"}
           appId={app?.id}
@@ -10084,6 +10290,12 @@ Example (Markdown Table):
           onAnalyze={handleAnalyzeAgents}
           onReview={handleReviewAgentRecommendation}
           onOpenTestCases={() => navigateToSection("cases")}
+        />
+      ) : (
+        <AutonomousAuditsStudio
+          application={app}
+          token={token}
+          onNavigateToSection={navigateToSection}
         />
       )}
     </div>
@@ -10193,7 +10405,13 @@ Example (Markdown Table):
     recommendations: agentsView,
     systemMap: systemMapView,
     settings: settingsView,
-    audit: settingsView,
+    audit: (
+      <AutonomousAuditsStudio
+        application={app}
+        token={token}
+        onNavigateToSection={navigateToSection}
+      />
+    ),
   };
   const navSections = navigationGroups.map((group) => ({
     id: group.id,

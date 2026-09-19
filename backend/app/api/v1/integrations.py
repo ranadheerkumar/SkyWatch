@@ -486,6 +486,7 @@ async def get_qtest_assets(
     "/jira/{connection_id}/defects",
     methods=["POST", "PUT", "PATCH", "DELETE"],
     status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+    include_in_schema=False,
 )
 def block_jira_mutations(connection_id: int) -> None:
     raise HTTPException(

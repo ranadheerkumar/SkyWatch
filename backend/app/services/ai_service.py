@@ -753,13 +753,16 @@ async def _run_bounded_exploration(page: Page, *, max_actions: int = EXPLORATORY
             observations.append(f"Exploratory action {attempted} ({action_kind} '{label}') was unavailable within the bounded timeout.")
             hypotheses.append(f"Hypothesis to verify: '{label}' may require a different role, state, or prerequisite before it is testable.")
         finally:
+            reset_failed = False
             try:
                 if page.url != start_url:
                     await page.goto(start_url, wait_until="domcontentloaded", timeout=6_000)
                 else:
                     await page.keyboard.press("Escape")
             except (PlaywrightError, PlaywrightTimeoutError):
-                break
+                reset_failed = True
+        if reset_failed:
+            break
     return observations[:EXPLORATORY_ACTION_LIMIT], hypotheses[:EXPLORATORY_ACTION_LIMIT], attempted
 
 

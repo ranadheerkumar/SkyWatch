@@ -54,6 +54,7 @@ async def get_observability_metrics(
 
 
 @router.get("/health")
+@router.head("/health", include_in_schema=False)
 async def deep_health_check(
     db: DbSession,
 ) -> dict[str, Any]:

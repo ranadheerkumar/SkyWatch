@@ -121,6 +121,7 @@ async def request_metrics_middleware(request: Request, call_next):
 
 
 @app.get("/health")
+@app.head("/health", include_in_schema=False)
 async def health() -> dict:
 	db_status = "healthy"
 	try:

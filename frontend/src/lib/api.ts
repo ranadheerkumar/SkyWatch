@@ -3,8 +3,18 @@ import { formatDuration } from "./formatDuration";
 import { logger } from "./logger";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_READ_RETRIES = 2;
+const DEFAULT_READ_RETRIES = 3;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function getAlternativeUrl(url: string): string | null {
+  if (url.includes("127.0.0.1:8000")) {
+    return url.replace("127.0.0.1:8000", "localhost:8000");
+  }
+  if (url.includes("localhost:8000")) {
+    return url.replace("localhost:8000", "127.0.0.1:8000");
+  }
+  return null;
+}
 
 export type ApiRequestOptions = RequestInit & {
   retries?: number;
@@ -92,6 +102,7 @@ async function fetchWithPolicy(url: string, options: ApiRequestOptions, headers:
   } = options;
   const method = String(fetchOptions.method ?? "GET").toUpperCase();
   const retries = isReadMethod(method) ? Math.max(0, requestedRetries ?? DEFAULT_READ_RETRIES) : 0;
+  let activeUrl = url;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
@@ -105,7 +116,7 @@ async function fetchWithPolicy(url: string, options: ApiRequestOptions, headers:
     else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(activeUrl, {
         ...fetchOptions,
         headers,
         signal: controller.signal,
@@ -114,20 +125,39 @@ async function fetchWithPolicy(url: string, options: ApiRequestOptions, headers:
       await response.body?.cancel();
       await waitForRetry(retryDelayMs(response, attempt), callerSignal ?? undefined);
     } catch (error) {
-      if (timedOut) throw new Error(`Request timed out after ${formatDuration(timeoutMs)} for ${url}`);
+      if (timedOut) throw new Error(`Request timed out after ${formatDuration(timeoutMs)} for ${activeUrl}`);
       if (callerSignal?.aborted) throw error;
+
+      // Automatically try alternative host (localhost <-> 127.0.0.1) on network failure
+      const altUrl = getAlternativeUrl(activeUrl);
+      if (altUrl && activeUrl !== altUrl) {
+        try {
+          const altResponse = await fetch(altUrl, {
+            ...fetchOptions,
+            headers,
+            signal: controller.signal,
+          });
+          if (altResponse.ok || !RETRYABLE_STATUS_CODES.has(altResponse.status)) {
+            activeUrl = altUrl;
+            return altResponse;
+          }
+        } catch {
+          // Retain activeUrl and continue retry cycle
+        }
+      }
+
       if (attempt >= retries) {
         const detail = error instanceof Error ? error.message : "Unknown network error";
-        throw new Error(`Network request failed for ${url}. Verify the backend is running and reachable. Technical detail: ${detail}`);
+        throw new Error(`Network request failed for ${activeUrl}. Verify the backend is running and reachable. Technical detail: ${detail}`);
       }
-      await waitForRetry(500 * 2 ** attempt, callerSignal ?? undefined);
+      await waitForRetry(350 * 2 ** attempt, callerSignal ?? undefined);
     } finally {
       globalThis.clearTimeout(timeout);
       callerSignal?.removeEventListener("abort", abortFromCaller);
     }
   }
 
-  throw new Error(`Request failed for ${url}`);
+  throw new Error(`Request failed for ${activeUrl}`);
 }
 
 function parseResponseBody(rawBody: string, contentType: string): unknown {

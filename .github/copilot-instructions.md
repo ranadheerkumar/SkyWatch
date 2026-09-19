@@ -58,7 +58,7 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
 - Self-Learning Engine (`docs/SELF_LEARNING_ENGINE.md`): Continuously harvests verified locator resolutions, assertion outcomes, and domain entities from passing/healed executions into durable vector memory.
 - Enterprise ALM Bridge (`docs/JIRA_QTEST_INTEGRATION_GUIDE.md`): Jira Cloud REST API v3 with Atlassian Document Format (ADF v1), bi-directional issue linking, multipart attachment uploads, and workflow transitions; Tricentis qTest SaaS Build API hierarchy (`/projects/{projectId}/builds`), auto-test-logs execution reporting, and dynamic custom field validation. Respect `ENABLE_JIRA_WRITE` and `ENABLE_QTEST_WRITE` safety controls.
 - Local Application Startup & Service Topology:
-  - Backend: FastAPI/Uvicorn on `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000`).
+  - Backend: FastAPI/Uvicorn on `http://0.0.0.0:8000` / `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000`).
   - Frontend: Next.js on `http://localhost:3000` (`npm run dev` from `frontend/`).
   - Health & Metrics Endpoints: `GET /api/v1/observability/health` (publicly accessible deep health probe, no auth required) and `GET /api/v1/observability/metrics` (authenticated metrics).
 - UI Navigation & Architecture:
@@ -79,6 +79,20 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
     - `🗑 Delete`: Bulk-deletes selected draft scenarios.
 - Test Case Row Action Cleanliness:
   - The redundant `v+` bump version button is removed from individual test case rows. Test case versioning is managed at the suite or application level.
+- Autonomous Audits & Campaigns Studio (`frontend/src/components/AutonomousAuditsStudio.tsx`):
+  - Accessible via "🎯 Autonomous Audits & Campaigns" tab in AI Recommendations / Agents Workspace or directly on `/audit`.
+  - Visual Regression Audits: Invokes `POST /api/v1/orchestrator/visual-audit` across Desktop (`1920x1080`), Tablet (`768x1024`), and Mobile (`375x812`) viewports with DOM tree structural hashing and pixel diff analysis.
+  - API Contract Testing Audits: Invokes `POST /api/v1/orchestrator/api-audit` to validate OpenAPI schema conformance, boundary payload resilience, and SLA response time benchmarking.
+  - Autonomous QA Campaigns: Invokes `POST /api/v1/orchestrator/campaigns` and tracks progress via `GET /api/v1/orchestrator/campaigns/{id}` with 1-5 parallel agent workers, auto-healing, and visual audit toggles.
+- System Observability & Self-Learning Telemetry (`frontend/src/components/ObservabilityMetricsCard.tsx`):
+  - Displayed in Quality Reports & Release Intelligence.
+  - Gateway Telemetry: Queries `GET /api/v1/observability/metrics` for live API throughput, error rates, p95 latency distributions, and active rate limiter buckets.
+  - Self-Learning Memory: Queries `GET /api/v1/ai-generation/self-learning/{app_id}` for learned locator counts, total locator hit frequencies, and self-healing retention statistics.
+- Playwright Test Suite Generator:
+  - Application Suite Export: Invokes `GET /api/v1/test-cases/application/{id}/export-playwright-suite` to generate clean, compiled TypeScript Playwright test specs with multi-spec tabs, copy-all, and download options.
+  - Single Spec Export & Git Push: Invokes `GET /api/v1/test-cases/{id}/export-playwright` and `POST /api/v1/test-cases/{id}/git-push` to persist specs to `tests/generated/`.
+- OpenAPI Cleanliness & Schema Hygiene:
+  - Dual-method routes supporting `HEAD` and `GET` or mutation block middleware must set `include_in_schema=False` on auxiliary decorators to prevent OpenAPI duplicate Operation ID schema validation warnings.
 - Dynamic Resilience:
   - Avoid hardcoded CSS selectors (e.g. `#user_email`). Always use resilient multi-selector fallback chains (`input[type=email], #email, [name=email]`, etc.).
   - Starter cases must dynamically reference the active application name and target URL.

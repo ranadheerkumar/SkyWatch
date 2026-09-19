@@ -1,8 +1,35 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.6`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.8`.
 
-## [2.0.6] - 2026-09-19
+## [2.0.8] - 2026-09-19
+
+### Added
+- **Autonomous Audits & Campaigns Studio (`AutonomousAuditsStudio.tsx`)**:
+  - Surfaced autonomous visual regression audits (`POST /api/v1/orchestrator/visual-audit`) across Desktop (`1920x1080`), Tablet (`768x1024`), and Mobile (`375x812`) viewports with diff percentage and DOM tree hash tracking.
+  - Surfaced API contract testing audits (`POST /api/v1/orchestrator/api-audit`) validating OpenAPI schema conformance, negative payload boundaries, and SLA response latency.
+  - Surfaced goal-driven autonomous QA campaigns (`POST /api/v1/orchestrator/campaigns`, `GET /api/v1/orchestrator/campaigns/{id}`) with configurable concurrency limits (1-5) and multi-agent coordination.
+- **System Observability & Self-Learning Telemetry (`ObservabilityMetricsCard.tsx`)**:
+  - Surfaced real-time API throughput, error rate percentages, p95 latency distribution, and active token bucket counts (`GET /api/v1/observability/metrics`).
+  - Surfaced AI self-learning locator cache retention, hit frequencies, and route performance profiles (`GET /api/v1/ai-generation/self-learning/{application_id}`).
+- **Playwright Test Suite Generator & Exporter**:
+  - Surfaced full application Playwright suite export (`GET /api/v1/test-cases/application/{id}/export-playwright-suite`) with multi-spec selector tabs, one-click `.spec.ts` downloads, and suite code copying.
+  - Surfaced single test-case Playwright spec compiler (`GET /api/v1/test-cases/{id}/export-playwright`) and repository persistence (`POST /api/v1/test-cases/{id}/git-push`).
+
+### Fixed
+- **OpenAPI Schema Hygiene & Duplicate Operation IDs**:
+  - Eliminated duplicate Operation ID warnings across FastAPI routes by decorating `HEAD` routes with `include_in_schema=False` in `integrations.py`, `observability.py`, and `main.py`.
+  - Ensured OpenAPI 3.1.0 schema generation outputs 119 clean paths with zero warnings under strict validation.
+
+## [2.0.7] - 2026-09-19
+
+### Fixed
+- **Backend API Reachability & Host Failover**:
+  - Bound Uvicorn server to `0.0.0.0:8000` to serve both IPv4 and IPv6 dual-stack lookups (`localhost` and `127.0.0.1`).
+  - Added automatic localhost <-> 127.0.0.1 alternative host failover in `frontend/src/lib/api.ts` so cross-origin network errors immediately fall back to the active host interface.
+  - Increased backend health probe retries (`retries: 4, timeoutMs: 10_000`) with progressive exponential backoff to seamlessly absorb live backend restarts without aborting scenario generation.
+  - Supported `HEAD` request methods on `/health` and `/api/v1/observability/health` for uptime pingers and lightweight connection checks.
+  - Fixed Python 3.14 `SyntaxWarning: 'break' in a 'finally' block` in `ai_service.py` to ensure clean control flow during browser exploration resets.
 
 ### Fixed
 - **Observability Deep Health Check Authorization**:
