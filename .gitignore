@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+.next-dev/
+out/
+.npm/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+frontend/AGENTS.md
+frontend/CLAUDE.md
+
+# Logs and artifacts
+*.log
+coverage/
+/tmp/
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+backend/uploads/
+vector_store/
+backend/vector_store/
+.local-dev-pids.json
+.local-sync-pid.json
+
+# Build and test metadata
+*.tsbuildinfo
+playwright-report/
+test-results/
+tests/generated/

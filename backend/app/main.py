@@ -1,0 +1,112 @@
+import asyncio
+import logging
+import platform
+import time
+from uuid import uuid4
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1.router import api_router
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.core.logging import configure_logging, correlation_id_context, set_correlation_id
+from app.core.security import hash_password
+from app.models import User
+
+
+# Windows subprocess support for asyncio
+if platform.system() == "Windows":
+	asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+configure_logging()
+logger = logging.getLogger("ai-qa-engine.api")
+
+
+def ensure_initial_admin() -> None:
+	with SessionLocal() as db:
+		admin_email = settings.INITIAL_ADMIN_EMAIL
+		admin_password = settings.INITIAL_ADMIN_PASSWORD
+		admin_user = db.query(User).filter(User.email == admin_email).first()
+		if admin_user is None:
+			admin_user = User(email=admin_email, password_hash=hash_password(admin_password), role="admin")
+			db.add(admin_user)
+			db.commit()
+			db.refresh(admin_user)
+		elif (admin_user.role or "").strip().lower() != "admin":
+			admin_user.role = "admin"
+			db.add(admin_user)
+			db.commit()
+
+
+app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
+app.add_middleware(
+	CORSMiddleware,
+	allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0):\d+",
+	allow_credentials=True,
+	allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
+	allow_headers=["*"],
+	expose_headers=[
+		"X-AI-QA-Engine-AI-Generation-Mode",
+		"X-AI-QA-Engine-AI-Provider",
+		"X-AI-QA-Engine-AI-Provider-Configured",
+		"X-AI-QA-Engine-AI-Generation-Note",
+	],
+)
+app.include_router(api_router)
+ensure_initial_admin()
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+	response = await call_next(request)
+	response.headers["X-Content-Type-Options"] = "nosniff"
+	response.headers["X-Frame-Options"] = "DENY"
+	response.headers["X-XSS-Protection"] = "1; mode=block"
+	response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+	return response
+
+
+@app.middleware("http")
+async def request_metrics_middleware(request: Request, call_next):
+	correlation_id = request.headers.get("X-Correlation-ID", "").strip() or str(uuid4())
+	token = set_correlation_id(correlation_id)
+	start = time.perf_counter()
+	request.state.correlation_id = correlation_id
+	try:
+		response = await call_next(request)
+		duration_ms = round((time.perf_counter() - start) * 1000, 2)
+		logger.info(
+			"request_completed method=%s path=%s status=%s duration_ms=%.2f",
+			request.method,
+			request.url.path,
+			response.status_code,
+			duration_ms,
+		)
+		response.headers["X-Correlation-ID"] = correlation_id
+		response.headers["X-Request-Duration-Ms"] = str(duration_ms)
+		return response
+	finally:
+		correlation_id_context.reset(token)
+
+
+@app.get("/health")
+async def health() -> dict:
+	db_status = "healthy"
+	try:
+		from sqlalchemy import text
+		with SessionLocal() as db:
+			db.execute(text("SELECT 1"))
+	except Exception as error:
+		logger.warning("Health check DB probe failed: %s", error)
+		db_status = f"unhealthy: {error}"
+
+	return {
+		"status": "ok" if db_status == "healthy" else "degraded",
+		"database": db_status,
+		"version": settings.APP_VERSION,
+		"environment": settings.ENVIRONMENT,
+	}

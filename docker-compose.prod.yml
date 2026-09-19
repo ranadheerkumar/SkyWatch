@@ -1,0 +1,151 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai-qa-engine}
+      POSTGRES_USER: ${POSTGRES_USER:-ai-qa-engine}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for production}
+    volumes:
+      - ai-qa-engine-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ai-qa-engine-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://ai-qa-engine:${POSTGRES_PASSWORD}@postgres:5432/ai-qa-engine}
+      SECRET_KEY: ${SECRET_KEY}
+      ENVIRONMENT: production
+      AI_QA_ENGINE_QUEUE_BACKEND: redis
+      AI_QA_ENGINE_QUEUE_NAME: ${AI_QA_ENGINE_QUEUE_NAME:-ai-qa-engine-runs}
+      AI_QA_ENGINE_REDIS_URL: ${AI_QA_ENGINE_REDIS_URL:-redis://redis:6379/0}
+      AI_QA_ENGINE_SECRET_PROVIDER: ${AI_QA_ENGINE_SECRET_PROVIDER:-env}
+      AI_QA_ENGINE_VAULT_ADDR: ${AI_QA_ENGINE_VAULT_ADDR:-}
+      AI_QA_ENGINE_VAULT_TOKEN: ${AI_QA_ENGINE_VAULT_TOKEN:-}
+      AI_QA_ENGINE_VAULT_PATH: ${AI_QA_ENGINE_VAULT_PATH:-secret/data/ai-qa-engine}
+      AI_QA_ENGINE_AI_PROVIDER: ${AI_QA_ENGINE_AI_PROVIDER:-github_copilot}
+      AI_QA_ENGINE_AI_BASE_URL: ${AI_QA_ENGINE_AI_BASE_URL:-https://api.githubcopilot.com}
+      AI_QA_ENGINE_AI_MODEL: ${AI_QA_ENGINE_AI_MODEL:-gpt-4o}
+      AI_QA_ENGINE_AI_TIMEOUT_SECONDS: ${AI_QA_ENGINE_AI_TIMEOUT_SECONDS:-45}
+      AI_QA_ENGINE_INTEGRATIONS_READ_ONLY: ${AI_QA_ENGINE_INTEGRATIONS_READ_ONLY:-true}
+      AI_QA_ENGINE_INTEGRATION_TIMEOUT_SECONDS: ${AI_QA_ENGINE_INTEGRATION_TIMEOUT_SECONDS:-15}
+      AI_QA_ENGINE_INTEGRATION_MAX_RESPONSE_BYTES: ${AI_QA_ENGINE_INTEGRATION_MAX_RESPONSE_BYTES:-2000000}
+      AI_QA_ENGINE_INTEGRATION_MAX_ASSET_ITEMS: ${AI_QA_ENGINE_INTEGRATION_MAX_ASSET_ITEMS:-100}
+      AI_QA_ENGINE_INTEGRATION_USER_AGENT: ${AI_QA_ENGINE_INTEGRATION_USER_AGENT:-AI-QA-Engine/1.0}
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+      JIRA_PROJECT_KEY: ${JIRA_PROJECT_KEY:-}
+      JIRA_FILTER_ID: ${JIRA_FILTER_ID:-}
+      JIRA_PROFILE_NAME: ${JIRA_PROFILE_NAME:-}
+      JIRA_CREDENTIAL_ENV_NAME: ${JIRA_CREDENTIAL_ENV_NAME:-JIRA_API_TOKEN}
+      QTEST_BASE_URL: ${QTEST_BASE_URL:-}
+      QTEST_TOKEN: ${QTEST_TOKEN:-}
+      QTEST_PROJECT_ID: ${QTEST_PROJECT_ID:-}
+      QTEST_PROJECT_NAME: ${QTEST_PROJECT_NAME:-}
+      QTEST_PROFILE_NAME: ${QTEST_PROFILE_NAME:-}
+      QTEST_CREDENTIAL_ENV_NAME: ${QTEST_CREDENTIAL_ENV_NAME:-QTEST_TOKEN}
+      ENABLE_JIRA_WRITE: ${ENABLE_JIRA_WRITE:-false}
+      ENABLE_QTEST_WRITE: ${ENABLE_QTEST_WRITE:-false}
+    volumes:
+      - ai-qa-engine-backend-data:/data
+      - ai-qa-engine-run-artifacts:/tmp/ai-qa-engine-runs
+      - ./backend/uploads:/app/uploads
+    expose:
+      - "8000"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    command: sh -c "rq worker ${AI_QA_ENGINE_QUEUE_NAME:-ai-qa-engine-runs} --url ${AI_QA_ENGINE_REDIS_URL:-redis://redis:6379/0}"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://ai-qa-engine:${POSTGRES_PASSWORD}@postgres:5432/ai-qa-engine}
+      SECRET_KEY: ${SECRET_KEY}
+      ENVIRONMENT: production
+      AI_QA_ENGINE_QUEUE_BACKEND: redis
+      AI_QA_ENGINE_QUEUE_NAME: ${AI_QA_ENGINE_QUEUE_NAME:-ai-qa-engine-runs}
+      AI_QA_ENGINE_REDIS_URL: ${AI_QA_ENGINE_REDIS_URL:-redis://redis:6379/0}
+      AI_QA_ENGINE_SECRET_PROVIDER: ${AI_QA_ENGINE_SECRET_PROVIDER:-env}
+      AI_QA_ENGINE_VAULT_ADDR: ${AI_QA_ENGINE_VAULT_ADDR:-}
+      AI_QA_ENGINE_VAULT_TOKEN: ${AI_QA_ENGINE_VAULT_TOKEN:-}
+      AI_QA_ENGINE_VAULT_PATH: ${AI_QA_ENGINE_VAULT_PATH:-secret/data/ai-qa-engine}
+      AI_QA_ENGINE_AI_PROVIDER: ${AI_QA_ENGINE_AI_PROVIDER:-github_copilot}
+      AI_QA_ENGINE_AI_BASE_URL: ${AI_QA_ENGINE_AI_BASE_URL:-https://api.githubcopilot.com}
+      AI_QA_ENGINE_AI_MODEL: ${AI_QA_ENGINE_AI_MODEL:-gpt-4o}
+      AI_QA_ENGINE_AI_TIMEOUT_SECONDS: ${AI_QA_ENGINE_AI_TIMEOUT_SECONDS:-45}
+      AI_QA_ENGINE_INTEGRATIONS_READ_ONLY: ${AI_QA_ENGINE_INTEGRATIONS_READ_ONLY:-true}
+      AI_QA_ENGINE_INTEGRATION_TIMEOUT_SECONDS: ${AI_QA_ENGINE_INTEGRATION_TIMEOUT_SECONDS:-15}
+      AI_QA_ENGINE_INTEGRATION_MAX_RESPONSE_BYTES: ${AI_QA_ENGINE_INTEGRATION_MAX_RESPONSE_BYTES:-2000000}
+      AI_QA_ENGINE_INTEGRATION_MAX_ASSET_ITEMS: ${AI_QA_ENGINE_INTEGRATION_MAX_ASSET_ITEMS:-100}
+      AI_QA_ENGINE_INTEGRATION_USER_AGENT: ${AI_QA_ENGINE_INTEGRATION_USER_AGENT:-AI-QA-Engine/1.0}
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+      JIRA_PROJECT_KEY: ${JIRA_PROJECT_KEY:-}
+      JIRA_FILTER_ID: ${JIRA_FILTER_ID:-}
+      JIRA_PROFILE_NAME: ${JIRA_PROFILE_NAME:-}
+      JIRA_CREDENTIAL_ENV_NAME: ${JIRA_CREDENTIAL_ENV_NAME:-JIRA_API_TOKEN}
+      QTEST_BASE_URL: ${QTEST_BASE_URL:-}
+      QTEST_TOKEN: ${QTEST_TOKEN:-}
+      QTEST_PROJECT_ID: ${QTEST_PROJECT_ID:-}
+      QTEST_PROJECT_NAME: ${QTEST_PROJECT_NAME:-}
+      QTEST_PROFILE_NAME: ${QTEST_PROFILE_NAME:-}
+      QTEST_CREDENTIAL_ENV_NAME: ${QTEST_CREDENTIAL_ENV_NAME:-QTEST_TOKEN}
+      ENABLE_JIRA_WRITE: ${ENABLE_JIRA_WRITE:-false}
+      ENABLE_QTEST_WRITE: ${ENABLE_QTEST_WRITE:-false}
+    volumes:
+      - ai-qa-engine-backend-data:/data
+      - ai-qa-engine-run-artifacts:/tmp/ai-qa-engine-runs
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+
+volumes:
+  ai-qa-engine-postgres-data:
+  ai-qa-engine-backend-data:
+  ai-qa-engine-run-artifacts:
+  ai-qa-engine-redis-data:
