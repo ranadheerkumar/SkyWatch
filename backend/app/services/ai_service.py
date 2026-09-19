@@ -1557,33 +1557,44 @@ def _load_provider_settings(
         raise AIServiceError("AI provider is disabled by configuration.")
     timeout_seconds = _load_timeout_seconds()
 
-    valid_providers = {"github_copilot", "copilot", "github", "github_models", "openai", "azure_openai", "azure", "anthropic", "claude", "gemini", "google", "local", "custom"}
+    valid_providers = {
+        "github_copilot", "copilot", "github", "github_models",
+        "openai", "azure_openai", "azure",
+        "anthropic", "claude",
+        "gemini", "google",
+        "local", "custom",
+    }
     if provider not in valid_providers:
         raise AIServiceError(
             f"Unsupported AI provider '{provider}'. Select one explicit provider: github_copilot, openai, azure_openai, anthropic, gemini, or local."
         )
 
-    # 1. Primary provider settings with backup models
-    settings_list = _build_settings_for_single_provider(
-        provider,
-        timeout_seconds,
-        requested_model=override_model,
-        require_api_key=True,
-    )
+    settings_list: list[AIProviderSettings] = []
 
-    # 2. Check for other configured secondary providers in the environment to serve as cross-provider fallbacks
+    # 1. Primary provider settings with backup models
+    try:
+        settings_list = _build_settings_for_single_provider(
+            provider,
+            timeout_seconds,
+            requested_model=override_model,
+            require_api_key=True,
+        )
+    except Exception as ex:
+        logger.info("Primary provider '%s' credential not found: %s. Cascade-checking available alternatives...", provider, ex)
+
+    # 2. Add other configured providers in the environment as fallback chains based on availability
     normalized_primary = (
-        "github_copilot" if provider in {"github_copilot", "copilot", "github", "github_models"}
+        "gemini" if provider in {"gemini", "google"}
+        else "github_copilot" if provider in {"github_copilot", "copilot", "github", "github_models"}
         else "azure_openai" if provider in {"azure_openai", "azure"}
         else "anthropic" if provider in {"anthropic", "claude"}
-        else "gemini" if provider in {"gemini", "google"}
         else "local" if provider in {"local", "custom"}
         else "openai"
     )
 
-    other_candidates = ["openai", "github_copilot", "anthropic", "gemini", "azure_openai", "local"]
+    other_candidates = ["gemini", "github_copilot", "openai", "anthropic", "azure_openai", "local"]
     for other_p in other_candidates:
-        if other_p == normalized_primary:
+        if other_p == normalized_primary and settings_list:
             continue
         try:
             other_settings = _build_settings_for_single_provider(
@@ -1597,7 +1608,11 @@ def _load_provider_settings(
             continue
 
     if not settings_list:
-        raise AIServiceError(f"No configured model settings available for provider '{provider}'.")
+        raise AIServiceError(
+            f"No AI provider credentials found for '{provider}' or any fallback provider. "
+            "Please configure GEMINI_API_KEY, GITHUB_TOKEN, OPENAI_API_KEY, or ANTHROPIC_API_KEY in backend/.env "
+            "or in the AI & Settings administration panel."
+        )
 
     return settings_list
 

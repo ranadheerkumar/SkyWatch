@@ -133,6 +133,18 @@ class Settings:
         or os.getenv("AI_QA_ENGINE_TIMEOUT_SECONDS", "45")
     )
 
+    # Google Gemini Direct Configuration
+    GEMINI_API_KEY: str = (
+        os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+        or ""
+    ).strip()
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+    GEMINI_BASE_URL: str = os.getenv(
+        "GEMINI_BASE_URL",
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+    ).strip().rstrip("/")
+
     # Playwright Execution Settings
     EXECUTION_MODE: str = os.getenv("SKYWATCH_EXECUTION_MODE", os.getenv("AI_QA_ENGINE_EXECUTION_MODE", "watch_live"))
     STEP_SETTLE_MS: int = int(os.getenv("SKYWATCH_STEP_SETTLE_MS", os.getenv("AI_QA_ENGINE_STEP_SETTLE_MS", "1200")))

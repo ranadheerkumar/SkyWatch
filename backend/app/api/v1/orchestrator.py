@@ -230,3 +230,34 @@ async def heal_test_step(
         "validated_live": record.validated_live,
         "duration_ms": record.duration_ms,
     }
+
+
+@router.get("/llm-providers")
+async def get_llm_providers_status(
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Inspect and return connectivity and availability status across all LLM providers (Gemini, Copilot, OpenAI, Anthropic, Local)."""
+    from app.core.config import settings
+    from app.services.llm_client import get_all_provider_statuses
+
+    providers = get_all_provider_statuses()
+    configured_providers = [p["provider"] for p in providers if p["configured"]]
+
+    # Determine active provider
+    current_setting = settings.AI_PROVIDER.strip().lower()
+    if current_setting in {"auto", "dynamic", "all"}:
+        active_provider = configured_providers[0] if configured_providers else "none"
+    elif current_setting in configured_providers:
+        active_provider = current_setting
+    elif configured_providers:
+        active_provider = configured_providers[0]
+    else:
+        active_provider = "none"
+
+    return {
+        "configured_primary": current_setting,
+        "active_provider": active_provider,
+        "has_available_provider": bool(configured_providers),
+        "available_count": len(configured_providers),
+        "providers": providers,
+    }

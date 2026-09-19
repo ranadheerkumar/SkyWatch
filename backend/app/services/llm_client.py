@@ -61,25 +61,125 @@ class LLMResponse:
     finish_reason: str = ""
 
 
+def get_all_provider_statuses() -> list[dict[str, Any]]:
+    """Inspect and return the availability and configuration status of all supported LLM providers."""
+    copilot_token = os.getenv("GITHUB_TOKEN") or os.getenv("COPILOT_API_KEY") or os.getenv("GH_TOKEN") or ""
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
+    openai_key = os.getenv("OPENAI_API_KEY") or ""
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY") or ""
+    azure_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("AZURE_API_KEY") or ""
+
+    return [
+        {
+            "provider": "gemini",
+            "name": "Google Gemini",
+            "configured": bool(gemini_key),
+            "default_model": os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")),
+            "models": ["gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-1.5-flash"],
+            "endpoint": os.getenv("GEMINI_BASE_URL", getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")),
+        },
+        {
+            "provider": "github_copilot",
+            "name": "GitHub Copilot",
+            "configured": bool(copilot_token),
+            "default_model": os.getenv("COPILOT_MODEL", "gpt-4o"),
+            "models": ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "o3-mini"],
+            "endpoint": "https://api.githubcopilot.com",
+        },
+        {
+            "provider": "openai",
+            "name": "OpenAI",
+            "configured": bool(openai_key),
+            "default_model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+            "models": ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"],
+            "endpoint": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        },
+        {
+            "provider": "anthropic",
+            "name": "Anthropic Claude",
+            "configured": bool(anthropic_key),
+            "default_model": os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
+            "models": ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+            "endpoint": "https://api.anthropic.com/v1",
+        },
+        {
+            "provider": "azure_openai",
+            "name": "Azure OpenAI",
+            "configured": bool(azure_key),
+            "default_model": os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
+            "models": ["gpt-4o", "gpt-4o-mini"],
+            "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+        },
+        {
+            "provider": "local",
+            "name": "Local / Ollama",
+            "configured": True,
+            "default_model": os.getenv("LOCAL_MODEL", "llama3.2"),
+            "models": ["llama3.2", "mistral", "deepseek-coder"],
+            "endpoint": os.getenv("LOCAL_LLM_URL", "http://localhost:11434/v1"),
+        },
+    ]
+
+
 def _resolve_provider_config(
     override_provider: str | None = None,
     override_model: str | None = None,
 ) -> LLMProviderConfig:
-    """Resolve LLM provider configuration from settings and optional overrides."""
+    """Resolve LLM provider configuration from settings, availability, and optional overrides."""
     provider = (override_provider or settings.AI_PROVIDER).strip().lower()
     model = (override_model or settings.AI_MODEL).strip()
     api_key = settings.AI_API_KEY
     base_url = settings.AI_ENDPOINT
 
-    # Provider-specific defaults
-    if provider in {"github_copilot", "copilot", "github", "github_models"}:
-        if not base_url or "openai.com" in base_url:
+    copilot_token = os.getenv("GITHUB_TOKEN") or os.getenv("COPILOT_API_KEY") or os.getenv("GH_TOKEN") or ""
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or ""
+    openai_key = os.getenv("OPENAI_API_KEY") or ""
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY") or ""
+
+    # Dynamic auto-detection if "auto" or if primary configured provider has no credentials
+    if provider in {"auto", "dynamic", "all"}:
+        if gemini_key:
+            provider = "gemini"
+        elif copilot_token:
+            provider = "github_copilot"
+        elif openai_key:
+            provider = "openai"
+        elif anthropic_key:
+            provider = "anthropic"
+        else:
+            provider = "github_copilot"
+
+    # Specific Provider Defaults
+    if provider in {"gemini", "google"}:
+        base_url = os.getenv(
+            "GEMINI_BASE_URL",
+            getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
+        )
+        api_key = gemini_key or api_key
+        if not model or model in {"gpt-4o", "gpt-4.1"}:
+            model = os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash"))
+
+    elif provider in {"github_copilot", "copilot", "github", "github_models"}:
+        if not base_url or "openai.com" in base_url or "googleapis.com" in base_url:
             base_url = os.getenv(
                 "GITHUB_COPILOT_BASE_URL",
                 os.getenv("COPILOT_BASE_URL", "https://api.githubcopilot.com"),
             )
         if not model or model == "gpt-4.1":
             model = os.getenv("GITHUB_COPILOT_MODEL", os.getenv("COPILOT_MODEL", "gpt-4o"))
+        api_key = copilot_token or api_key
+
+    elif provider == "openai":
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        api_key = openai_key or api_key
+        if not model:
+            model = "gpt-4o"
+
+    elif provider in {"anthropic", "claude"}:
+        base_url = "https://api.anthropic.com/v1"
+        api_key = anthropic_key or api_key
+        if not model:
+            model = "claude-3-5-sonnet-20241022"
 
     return LLMProviderConfig(
         provider=provider,
@@ -107,6 +207,9 @@ def _build_headers(config: LLMProviderConfig) -> dict[str, str]:
             headers["Editor-Version"] = "vscode/1.95.0"
             headers["User-Agent"] = "GitHubCopilot/1.0"
             headers["Copilot-Integration-Id"] = "vscode-chat"
+        elif config.provider in {"gemini", "google"}:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+            headers["User-Agent"] = "SkyWatch-Gemini/2.0"
         else:
             headers["Authorization"] = f"Bearer {config.api_key}"
     return headers
