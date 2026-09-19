@@ -61,3 +61,23 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - Backend: FastAPI/Uvicorn on `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000`).
   - Frontend: Next.js on `http://localhost:3000` (`npm run dev` from `frontend/`).
   - Health & Metrics Endpoints: `GET /api/v1/observability/health` and `GET /api/v1/observability/metrics`.
+- UI Navigation & Architecture:
+  - Core navigation is consolidated into 7 focused product pillars: `dashboard`, `aiGenerator`, `systemMap`, `execution`, `runHistory`, `defects`, `reports`, and `settings` (with embedded audit and AI settings).
+  - Legacy routes (`/projects`, `/applications`, `/test-cases`, `/test-suites`, `/evidence`, `/mapping`) resolve to their primary pillar sections to avoid empty wrapper pages.
+- Build Report Parity & Canonical Backend Synchronization:
+  - Post-execution build reports MUST query `GET /api/v1/execution/builds/{build_id}/detail` upon batch completion. Do not display diverged client-synthesized reports.
+  - Build ID display across `CompleteBuildReportPanel` and `RunHistoryWorkspace` must strictly use `report.buildName` or 6-character uppercase hex slicing (`Build #${build_id.slice(-6).toUpperCase()}`).
+- Scenario Generation Stay-in-Place & Grouped Consolidation:
+  - Generating AI test scenarios does NOT auto-redirect to the Execute Tests screen. The user stays in the AI Scenario Studio (`aiGenerator`) to review, consolidate, and curate generated cases.
+  - Generated cases support multi-select checkboxes, "Select All", and grouped consolidation actions:
+    - `⚡ Consolidate Scenarios`: Combines 2+ selected scenarios into a unified end-to-end user journey with sequenced step renumbering.
+    - `📁 Add to Suite`: Bulk-assigns selected scenarios to a target Test Suite.
+    - `✓ Mark Ready`: Bulk-approves selected scenarios.
+    - `🚀 Run Selected`: Executes only the selected subset of scenarios.
+    - `📥 Export`: Exports selected scenarios as CSV or JSON.
+    - `🗑 Delete`: Bulk-deletes selected draft scenarios.
+- Test Case Row Action Cleanliness:
+  - The redundant `v+` bump version button is removed from individual test case rows. Test case versioning is managed at the suite or application level.
+- Dynamic Resilience:
+  - Avoid hardcoded CSS selectors (e.g. `#user_email`). Always use resilient multi-selector fallback chains (`input[type=email], #email, [name=email]`, etc.).
+  - Starter cases must dynamically reference the active application name and target URL.

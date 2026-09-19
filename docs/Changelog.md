@@ -1,8 +1,33 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.4`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.5`.
 
-## [2.0.4] - 2026-09-19
+## [2.0.5] - 2026-09-19
+
+### Added
+- **Grouped Scenario Consolidation Workspace**:
+  - Added multi-selection checkboxes ("Select All" and individual row toggles) to the Generated Case Preview.
+  - Added **⚡ Consolidate Scenarios**: Intelligently combines multiple selected scenarios into a single sequenced end-to-end user journey with continuous step numbering and consolidated expected results.
+  - Added **📁 Bulk Assign to Suite**: Directly assigns selected generated scenarios into existing or target Test Suites.
+  - Added **✓ Bulk Approve**: Bulk-marks selected scenarios as "Ready" for execution.
+  - Added **🚀 Run Selected**: Executes only the chosen scenarios directly without forcing a full test suite run.
+  - Added **📥 Bulk Export**: Exports selected scenarios to structured CSV and JSON files.
+  - Added **🗑 Bulk Delete**: Prunes unwanted generated draft scenarios via `DELETE /api/v1/test-cases/bulk`.
+
+### Fixed
+- **Build Report & Run History Synchronization**:
+  - Fixed discrepancy where post-execution build reports did not match the build shown in Run History.
+  - The runner now immediately queries `GET /api/v1/execution/builds/{build_id}/detail` to populate `CompleteBuildReportPanel` with canonical backend build metrics, status, duration, and case breakdowns.
+  - Unified build identifier rendering across `CompleteBuildReportPanel` and `RunHistoryWorkspace` to use `buildName` or standard 6-character hex slicing (`Build #ABCDEF`).
+- **Scenario Generation Stay-in-Place Flow**:
+  - Eliminated forced auto-navigation away from the AI Scenario Studio to the "Execute Tests" screen upon generation completion. Users remain in place to inspect, edit, consolidate, and approve scenarios.
+  - Newly generated test cases are automatically selected in the consolidation workspace.
+- **Removed "v+" Bump Version Button**:
+  - Removed the unnecessary `v+` button from the test cases table row actions and pruned unused client handlers.
+- **Eliminated Hardcoded Selectors & Static Texts**:
+  - Replaced hardcoded selectors (`#user_email`, `#user_password`, `input[type=submit]`) with resilient multi-selector fallback cascades (`input[type=email], #email, [name=email]`, etc.).
+  - Made starter test cases dynamically reference the active application name and target endpoint.
+  - Replaced hardcoded fallback AI engine logs with active configured provider and model metadata.
 
 ### Documentation
 - **Copilot Instructions Grounding & Contract Synchronization**:

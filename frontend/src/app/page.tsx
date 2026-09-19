@@ -104,9 +104,9 @@ const EXECUTION_CONFIGURATION_STORAGE_KEY = "ai-qa-engine:execution-configuratio
 const TEST_DATA_PROFILE_STORAGE_KEY = "ai-qa-engine:test-data-profile";
 const RUNTIME_PARAMETER_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const DEFAULT_EXECUTION_PARALLELISM = 1;
-const DEFAULT_LOGIN_EMAIL_SELECTOR = "#user_email";
-const DEFAULT_LOGIN_PASSWORD_SELECTOR = "#user_password";
-const DEFAULT_LOGIN_SUBMIT_SELECTOR = "input[type=submit]";
+const DEFAULT_LOGIN_EMAIL_SELECTOR = "input[type=email], #email, #user_email, input[name=email], [data-testid=email], input[type=text]";
+const DEFAULT_LOGIN_PASSWORD_SELECTOR = "input[type=password], #password, #user_password, input[name=password], [data-testid=password]";
+const DEFAULT_LOGIN_SUBMIT_SELECTOR = "button[type=submit], input[type=submit], form button, [data-testid=submit]";
 
 const DEFAULT_AI_AGENT_STAGES: AIAgentStage[] = [
   { key: "document_analysis", name: "Document Analysis Agent", responsibility: "Extract requirements, features, business rules, and risks.", status: "queued", progress: 0, detail: "Waiting for generation input." },
@@ -1503,7 +1503,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [builds, setBuilds] = useState<BuildExecutionSummary[]>([]);
   const [activeBuildReportModal, setActiveBuildReportModal] = useState<BuildExecutionReport | BuildExecutionDetail | null>(null);
-  const [latestBuildReport, setLatestBuildReport] = useState<BuildExecutionReport | null>(null);
+  const [latestBuildReport, setLatestBuildReport] = useState<BuildExecutionReport | BuildExecutionDetail | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [runStatus, setRunStatus] = useState("Idle");
   const [runLog, setRunLog] = useState("");
@@ -1546,10 +1546,13 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   const [aiIncludePerformance, setAiIncludePerformance] = useState(false);
   const [aiPerformanceBudget, setAiPerformanceBudget] = useState("");
   const [aiModuleFocus, setAiModuleFocus] = useState("");
-  const [openCasesAfterGeneration, setOpenCasesAfterGeneration] = useState(true);
+  const [openCasesAfterGeneration, setOpenCasesAfterGeneration] = useState(false);
   const [openExecutionAfterGeneration, setOpenExecutionAfterGeneration] = useState(false);
   const [runGeneratedAfterGeneration, setRunGeneratedAfterGeneration] = useState(false);
   const [guidedDemoMode, setGuidedDemoMode] = useState(false);
+  const [selectedGeneratedCaseIds, setSelectedGeneratedCaseIds] = useState<number[]>([]);
+  const [consolidatingScenarios, setConsolidatingScenarios] = useState(false);
+  const [bulkActionWorking, setBulkActionWorking] = useState(false);
   const [latestGeneratedCaseIds, setLatestGeneratedCaseIds] = useState<number[]>(readLatestGeneratedCaseIds);
   const [latestGenerationInput, setLatestGenerationInput] = useState<{ prompt: string; documentNames: string[] } | null>(null);
   const [savingAiTarget, setSavingAiTarget] = useState(false);
@@ -2403,7 +2406,8 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
       );
       setActiveBuildReportModal(detail);
     } catch {
-      if (latestBuildReport && latestBuildReport.buildId === buildId) {
+      const currentReportId = latestBuildReport ? ("buildId" in latestBuildReport ? latestBuildReport.buildId : latestBuildReport.build_id) : null;
+      if (latestBuildReport && currentReportId === buildId) {
         setActiveBuildReportModal(latestBuildReport);
       } else {
         notify("Unable to load build execution details.");
@@ -2791,23 +2795,6 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     }
   };
 
-  const handleVersionTestCase = async (caseId: number) => {
-    if (!token) return;
-    try {
-      await apiFetch<any>(
-        `/api/v1/test-cases/${caseId}/version`,
-        {
-          method: "POST",
-        },
-        token,
-      );
-      await loadDashboardData(token, app?.name);
-      notify("Version bumped successfully");
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Version update failed");
-    }
-  };
-
   const handleDeleteTestCase = async (caseId: number, title: string) => {
     if (!token) return;
     if (!window.confirm(`Delete test case "${title}"?`)) return;
@@ -3059,6 +3046,170 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     } finally {
       setReviewingGeneratedCaseId(null);
     }
+  };
+
+  const handleConsolidateSelectedScenarios = async () => {
+    if (!token || !app?.id) {
+      notify("Select an application first");
+      return;
+    }
+    if (selectedGeneratedCaseIds.length < 2) {
+      notify("Select at least 2 scenarios to consolidate");
+      return;
+    }
+    const casesToConsolidate = selectedCases.filter((c) => selectedGeneratedCaseIds.includes(c.id));
+    if (!casesToConsolidate.length) return;
+
+    setConsolidatingScenarios(true);
+    try {
+      const titles = casesToConsolidate.map((c) => c.title.replace(/^TC\s*\d+[:.-]?\s*/i, "").trim());
+      const combinedTitle = `Consolidated E2E Flow: ${titles.slice(0, 3).join(" ➔ ")}${titles.length > 3 ? ` (+${titles.length - 3} more)` : ""}`;
+
+      let stepIndex = 1;
+      const consolidatedSteps: string[] = [];
+      casesToConsolidate.forEach((c) => {
+        const parsed = parseStepEntries(c.steps).filter((s) => s.text && s.text !== "—");
+        if (parsed.length) {
+          consolidatedSteps.push(`// --- Flow: ${c.title} ---`);
+          parsed.forEach((s) => {
+            consolidatedSteps.push(`${stepIndex}. ${s.text}`);
+            stepIndex += 1;
+          });
+        }
+      });
+
+      const combinedExpected = casesToConsolidate
+        .map((c) => c.expected_result?.trim())
+        .filter(Boolean)
+        .map((exp, i) => `${i + 1}. ${exp}`)
+        .join("\n");
+
+      const created = await apiFetch<TestCase>(
+        "/api/v1/test-cases",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            application_id: app.id,
+            title: combinedTitle,
+            steps: consolidatedSteps.join("\n"),
+            expected_result: combinedExpected || "All consolidated workflow steps and assertions pass successfully.",
+            status: "ready",
+          }),
+        },
+        token,
+      );
+      notify(`Successfully consolidated ${casesToConsolidate.length} scenarios into "${created.title.slice(0, 45)}..."!`);
+      await loadDashboardData(token, app.name);
+      await loadAutomationReadiness(token, app.id);
+      setSelectedGeneratedCaseIds([created.id]);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to consolidate scenarios");
+    } finally {
+      setConsolidatingScenarios(false);
+    }
+  };
+
+  const handleBulkApproveGeneratedCases = async () => {
+    if (!token || !selectedGeneratedCaseIds.length) return;
+    setBulkActionWorking(true);
+    try {
+      await Promise.all(
+        selectedGeneratedCaseIds.map(async (caseId) => {
+          await apiFetch(
+            `/api/v1/test-cases/${caseId}/review`,
+            { method: "POST", body: JSON.stringify({ action: "approve" }) },
+            token,
+          ).catch(() => null);
+        }),
+      );
+      notify(`Marked ${selectedGeneratedCaseIds.length} scenario(s) as Ready`);
+      await loadDashboardData(token, app?.name);
+      if (app?.id) await loadAutomationReadiness(token, app.id);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to approve scenarios");
+    } finally {
+      setBulkActionWorking(false);
+    }
+  };
+
+  const handleBulkDeleteGeneratedCases = async () => {
+    if (!token || !selectedGeneratedCaseIds.length) return;
+    if (!window.confirm(`Delete ${selectedGeneratedCaseIds.length} selected scenario(s)?`)) return;
+    setBulkActionWorking(true);
+    try {
+      await apiFetch(
+        "/api/v1/test-cases/bulk",
+        {
+          method: "DELETE",
+          body: JSON.stringify({ test_case_ids: selectedGeneratedCaseIds }),
+        },
+        token,
+      );
+      notify(`Deleted ${selectedGeneratedCaseIds.length} scenario(s)`);
+      setSelectedGeneratedCaseIds([]);
+      await loadDashboardData(token, app?.name);
+      if (app?.id) await loadAutomationReadiness(token, app.id);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to delete scenarios");
+    } finally {
+      setBulkActionWorking(false);
+    }
+  };
+
+  const handleBulkAssignToSuite = async (suiteId: number) => {
+    if (!token || !selectedGeneratedCaseIds.length) return;
+    const targetSuite = testSuites.find((s) => s.id === suiteId);
+    if (!targetSuite) return;
+    const merged = Array.from(new Set([...(targetSuite.case_ids || []), ...selectedGeneratedCaseIds]));
+    setBulkActionWorking(true);
+    try {
+      await apiFetch(
+        `/api/v1/test-suites/${suiteId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ case_ids: merged }),
+        },
+        token,
+      );
+      notify(`Assigned ${selectedGeneratedCaseIds.length} scenario(s) to suite "${targetSuite.name}"`);
+      await loadDashboardData(token, app?.name);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to assign to suite");
+    } finally {
+      setBulkActionWorking(false);
+    }
+  };
+
+  const handleBulkExportSelected = (format: "csv" | "json") => {
+    if (!selectedGeneratedCaseIds.length) return;
+    const casesToExport = selectedCases.filter((c) => selectedGeneratedCaseIds.includes(c.id));
+    if (format === "json") {
+      const blob = new Blob([JSON.stringify(casesToExport, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `scenarios-${app?.name || "app"}-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const headers = ["ID", "Title", "Steps", "Expected Result", "Status"];
+      const rows = casesToExport.map((c) => [
+        String(c.id),
+        `"${(c.title || "").replace(/"/g, '""')}"`,
+        `"${(c.steps || "").replace(/"/g, '""')}"`,
+        `"${(c.expected_result || "").replace(/"/g, '""')}"`,
+        c.status,
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `scenarios-${app?.name || "app"}-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    notify(`Exported ${casesToExport.length} scenario(s) to ${format.toUpperCase()}`);
   };
 
   const closeDefectModal = (clearDraft = true) => {
@@ -4767,6 +4918,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
 
       const generatedBuildReport: BuildExecutionReport = {
         buildId: batchId,
+        buildName: buildDisplayName,
         applicationName: app.name,
         targetUrl: app.url,
         startedAt: runStartedAt,
@@ -4792,7 +4944,17 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
           };
         }),
       };
-      setLatestBuildReport(generatedBuildReport);
+
+      try {
+        const canonicalBuildDetail = await apiFetch<BuildExecutionDetail>(
+          `/api/v1/execution/builds/${batchId}/detail`,
+          {},
+          token,
+        );
+        setLatestBuildReport(canonicalBuildDetail);
+      } catch {
+        setLatestBuildReport(generatedBuildReport);
+      }
 
       await loadDashboardData(token, app?.name);
       await refreshExecutionHistory(token, app.id);
@@ -4925,14 +5087,35 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
       notify("Select an application first");
       return;
     }
-    setCreatingStarterCases(true);
+    const appName = selectedApp.name || "Application";
+    const targetUrl = selectedApp.url || "the application URL";
     const templates = selectedApp.platform === "web" ? [
-      { title: "Page loads successfully", steps: "1. Open the application URL\n2. Wait for the page to load", expected_result: "The application page is visible." },
-      { title: "Primary page content is visible", steps: "1. Open the application\n2. Validate the main page content", expected_result: "The main content is visible to the user." },
-      { title: "Navigation remains available", steps: "1. Open the application\n2. Validate the navigation area", expected_result: "A user can access the application navigation." },
+      {
+        title: `Verify ${appName} loads successfully`,
+        steps: `1. Open ${targetUrl}\n2. Wait for page document ready state\n3. Verify HTTP 200 response and root container visibility`,
+        expected_result: `${appName} homepage renders successfully without unhandled errors.`,
+      },
+      {
+        title: `Verify ${appName} primary navigation and layout`,
+        steps: `1. Open ${targetUrl}\n2. Validate primary navigation header and essential navigation links\n3. Confirm interactive elements respond to keyboard and mouse focus`,
+        expected_result: `Primary navigation and core layout components are displayed properly for ${appName}.`,
+      },
+      {
+        title: `Verify ${appName} console health and baseline accessibility`,
+        steps: `1. Open ${targetUrl}\n2. Inspect browser console for uncaught exceptions or resource loading failures\n3. Verify page landmarks and accessible interactive controls`,
+        expected_result: `No severe application errors in console and core interactive elements meet baseline criteria.`,
+      },
     ] : [
-      { title: "Application launches", steps: "1. Install the application package\n2. Launch the application", expected_result: "The first application screen is displayed." },
-      { title: "Primary screen is usable", steps: "1. Launch the application\n2. Validate the primary controls", expected_result: "The primary controls are visible and usable." },
+      {
+        title: `Launch ${appName} mobile target`,
+        steps: `1. Initialize the ${appName} mobile application package\n2. Wait for initial launch view to render`,
+        expected_result: `${appName} opens to the initial interactive screen.`,
+      },
+      {
+        title: `Verify ${appName} primary mobile viewport controls`,
+        steps: `1. Launch ${appName}\n2. Validate primary interaction views and control elements`,
+        expected_result: `Primary mobile UI controls are visible and responsive.`,
+      },
     ];
     const existingTitleKeys = new Set(
       selectedCases.map((caseItem) => normaliseCaseKey(caseItem.title)),
@@ -5075,7 +5258,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     setAiAgentStages(DEFAULT_AI_AGENT_STAGES.map((stage) => ({ ...stage })));
 
     appendAiLog("info", `🚀 Initializing AI test scenario synthesis for "${selectedApp.name}" (${selectedApp.platform.toUpperCase()})`);
-    appendAiLog("ai", `🤖 Engine: ${aiConfigState?.provider || "github_copilot"} | Model: ${aiConfigState?.model || "gpt-4o"} | Endpoint: ${aiConfigState?.endpoint || "https://api.githubcopilot.com"}`);
+    appendAiLog("ai", `🤖 Engine: ${aiConfigState?.provider || "Configured Provider"} | Model: ${aiConfigState?.model || "Active Model"} | Endpoint: ${aiConfigState?.endpoint || "Backend AI Gateway"}`);
     appendAiLog("info", `📝 Input Specification: "${prompt}"`);
     appendAiLog("info", `🎯 Scope: ${aiCaseCount === 0 ? "Dynamic AI Autonomy" : `${aiCaseCount} cases requested`} | Step bounds: ${aiMinSteps}-${aiMaxSteps} steps`);
     if (aiModuleFocus.trim()) appendAiLog("info", `🔍 Focus Module: "${aiModuleFocus.trim()}"`);
@@ -5300,6 +5483,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
         ? `${generationMessageCore} using the configured provider model`
         : generationMessageCore;
       notify(guidedRunEnabled ? `Demo mode: ${generationMessage.toLowerCase()} and starting execution` : generationMessage);
+      setSelectedGeneratedCaseIds(generatedCaseIds);
       if (shouldRunImmediately && selectedApp.platform === "web" && generatedCaseIds.length) {
         navigateToSection("execution");
         await runApplicationCaseTests(generatedCaseIds);
@@ -5502,7 +5686,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   const aiProviderHint = aiGenerationSource?.mode === "unknown"
     ? "Verify the selected provider and connection settings before generating again."
     : "";
-  const aiValidatedCases = latestGeneratedCases;
+  const aiValidatedCases = latestGeneratedCases.length ? latestGeneratedCases : selectedCases;
   const aiCaseSummaryRows = useMemo(
     () => aiValidatedCases.map((caseItem) => {
       const readiness = automationReadinessByCaseId[caseItem.id];
@@ -7989,14 +8173,6 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleVersionTestCase(caseItem.id)}
-                        className="row-action-btn"
-                        title="Bump version"
-                      >
-                        v+
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => void handleDeleteTestCase(caseItem.id, caseItem.title)}
                         className="row-action-btn danger"
                         title="Delete test case"
@@ -8651,7 +8827,7 @@ Example (Markdown Table):
               </button>
             </div>
           </div>
-          
+
           {/* Live Counter Strip */}
           <div className="progress-strip">
             <div className="progress-item">
@@ -9604,71 +9780,262 @@ Example (Markdown Table):
         </div>
       ) : null}
 
+      {/* Grouped Actions & Consolidation Bar */}
+      <div
+        className="panel"
+        style={{
+          padding: "12px 18px",
+          margin: "16px 0 12px",
+          background: selectedGeneratedCaseIds.length > 0 ? "rgba(181, 18, 27, 0.04)" : "var(--bg-card, #ffffff)",
+          border: `1px solid ${selectedGeneratedCaseIds.length > 0 ? "var(--brand-primary, #b5121b)" : "var(--border-light, #e2e8f0)"}`,
+          borderRadius: "var(--radius-md, 8px)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
+            <input
+              type="checkbox"
+              checked={aiCaseSummaryRows.length > 0 && selectedGeneratedCaseIds.length === aiCaseSummaryRows.length}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedGeneratedCaseIds(aiCaseSummaryRows.map((r) => r.id));
+                } else {
+                  setSelectedGeneratedCaseIds([]);
+                }
+              }}
+              disabled={aiCaseSummaryRows.length === 0}
+            />
+            <span>Select All ({aiCaseSummaryRows.length})</span>
+          </label>
+          {selectedGeneratedCaseIds.length > 0 && (
+            <span
+              className="badge badge-primary"
+              style={{ fontSize: "12px", fontWeight: 700, padding: "3px 8px" }}
+            >
+              {selectedGeneratedCaseIds.length} scenario{selectedGeneratedCaseIds.length === 1 ? "" : "s"} selected
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          {/* Consolidate Action */}
+          <button
+            type="button"
+            className="primary btn-sm"
+            onClick={() => void handleConsolidateSelectedScenarios()}
+            disabled={selectedGeneratedCaseIds.length < 2 || consolidatingScenarios || bulkActionWorking}
+            title={selectedGeneratedCaseIds.length < 2 ? "Select 2 or more scenarios to consolidate into a single E2E flow" : "Merge selected scenarios into a unified end-to-end journey"}
+            style={{ fontWeight: 700, background: selectedGeneratedCaseIds.length >= 2 ? "linear-gradient(135deg, #b5121b, #8a0c13)" : undefined }}
+          >
+            {consolidatingScenarios ? "Consolidating..." : `⚡ Consolidate Scenarios (${selectedGeneratedCaseIds.length >= 2 ? selectedGeneratedCaseIds.length : 0})`}
+          </button>
+
+          {/* Add to Suite Dropdown */}
+          {selectedAppSuites.length > 0 && (
+            <select
+              className="btn-sm"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  void handleBulkAssignToSuite(Number(e.target.value));
+                  e.target.value = "";
+                }
+              }}
+              disabled={selectedGeneratedCaseIds.length === 0 || bulkActionWorking}
+              style={{ fontSize: "12px", padding: "4px 8px" }}
+            >
+              <option value="" disabled>📁 Add to Test Suite...</option>
+              {selectedAppSuites.map((s) => (
+                <option key={`suite-opt-${s.id}`} value={s.id}>
+                  {s.name} ({s.case_ids?.length || 0} cases)
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Bulk Approve */}
+          <button
+            type="button"
+            className="secondary btn-sm"
+            onClick={() => void handleBulkApproveGeneratedCases()}
+            disabled={selectedGeneratedCaseIds.length === 0 || bulkActionWorking}
+            title="Mark selected scenarios as Ready for execution"
+          >
+            ✓ Mark Ready
+          </button>
+
+          {/* Run Selected */}
+          <button
+            type="button"
+            className="secondary btn-sm"
+            onClick={() => {
+              if (selectedGeneratedCaseIds.length) {
+                navigateToSection("execution");
+                void runApplicationCaseTests(selectedGeneratedCaseIds);
+              }
+            }}
+            disabled={selectedGeneratedCaseIds.length === 0 || running}
+            title="Execute only the selected scenarios"
+            style={{ fontWeight: 600 }}
+          >
+            🚀 Run Selected ({selectedGeneratedCaseIds.length})
+          </button>
+
+          {/* Export Dropdown */}
+          <button
+            type="button"
+            className="secondary btn-sm"
+            onClick={() => handleBulkExportSelected("csv")}
+            disabled={selectedGeneratedCaseIds.length === 0}
+            title="Export selected scenarios as CSV"
+          >
+            📥 CSV
+          </button>
+          <button
+            type="button"
+            className="secondary btn-sm"
+            onClick={() => handleBulkExportSelected("json")}
+            disabled={selectedGeneratedCaseIds.length === 0}
+            title="Export selected scenarios as JSON"
+          >
+            📥 JSON
+          </button>
+
+          {/* Bulk Delete */}
+          <button
+            type="button"
+            className="secondary btn-danger btn-sm"
+            onClick={() => void handleBulkDeleteGeneratedCases()}
+            disabled={selectedGeneratedCaseIds.length === 0 || bulkActionWorking}
+            title="Delete selected scenarios"
+          >
+            🗑 Delete
+          </button>
+
+          {selectedGeneratedCaseIds.length > 0 && (
+            <button
+              type="button"
+              className="table-action"
+              onClick={() => setSelectedGeneratedCaseIds([])}
+              style={{ fontSize: "12px", marginLeft: "4px" }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       <Table
         title="Generated case preview"
         meta={aiCaseSummaryRows.length ? `${aiCaseSummaryRows.length} case${aiCaseSummaryRows.length === 1 ? "" : "s"}` : "No generated cases yet"}
         containedScroll={false}
       >
         <table>
-          <thead><tr><th scope="col">Case ID</th><th scope="col">Test case</th><th scope="col">Steps</th><th scope="col">Status</th><th scope="col">Automation readiness</th><th scope="col">Review</th></tr></thead>
+          <thead>
+            <tr>
+              <th scope="col" style={{ width: "36px", textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={aiCaseSummaryRows.length > 0 && selectedGeneratedCaseIds.length === aiCaseSummaryRows.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedGeneratedCaseIds(aiCaseSummaryRows.map((r) => r.id));
+                    } else {
+                      setSelectedGeneratedCaseIds([]);
+                    }
+                  }}
+                  aria-label="Select all scenarios"
+                />
+              </th>
+              <th scope="col">Case ID</th>
+              <th scope="col">Test case</th>
+              <th scope="col">Steps</th>
+              <th scope="col">Status</th>
+              <th scope="col">Automation readiness</th>
+              <th scope="col">Review</th>
+            </tr>
+          </thead>
           <tbody>
-            {aiCaseSummaryRows.length ? aiCaseSummaryRows.map((row) => (
-              <tr key={`ai-summary-${row.id}`}>
-                <td>#{row.id}</td>
-                <td><strong>{row.title}</strong></td>
-                <td>{row.stepCount || "—"}</td>
-                <td>{renderStatusChip(row.status)}</td>
-                <td>
-                  <div className="status-cell-stack">
-                    <span>{row.confidenceLabel}</span>
-                    {row.needsReview ? (
-                      <button
-                        type="button"
-                        className="automation-chip review-chip"
-                        onClick={() => {
-                          const caseItem = selectedCases.find((item) => item.id === row.id);
-                          if (caseItem) openTestCaseEditor(caseItem);
-                        }}
-                        title="Edit this test case and review its selectors"
-                        aria-label={`Review selectors for ${row.title}`}
-                      >
-                        Review selectors
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-                <td>
-                  <div className="table-actions">
-                    {row.status.toLowerCase() !== "ready" ? (
-                      <button
-                        type="button"
-                        className="table-action"
-                        onClick={() => {
-                          const caseItem = selectedCases.find((item) => item.id === row.id);
-                          if (caseItem) void updateGeneratedCaseStatus(caseItem, "ready");
-                        }}
-                        disabled={reviewingGeneratedCaseId === row.id}
-                      >
-                        {reviewingGeneratedCaseId === row.id ? "Saving..." : "Approve"}
-                      </button>
-                    ) : null}
-                    {row.status.toLowerCase() !== "rejected" ? (
-                      <button
-                        type="button"
-                        className="table-action btn-danger"
-                        onClick={() => {
-                          const caseItem = selectedCases.find((item) => item.id === row.id);
-                          if (caseItem) void updateGeneratedCaseStatus(caseItem, "rejected");
-                        }}
-                        disabled={reviewingGeneratedCaseId === row.id}
-                      >
-                        Reject
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            )) : <tr><td colSpan={6} className="muted">Generate cases to preview them here.</td></tr>}
+            {aiCaseSummaryRows.length ? aiCaseSummaryRows.map((row) => {
+              const isSelected = selectedGeneratedCaseIds.includes(row.id);
+              return (
+                <tr
+                  key={`ai-summary-${row.id}`}
+                  style={{ backgroundColor: isSelected ? "rgba(181, 18, 27, 0.03)" : undefined }}
+                >
+                  <td style={{ textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {
+                        setSelectedGeneratedCaseIds((curr) =>
+                          curr.includes(row.id) ? curr.filter((id) => id !== row.id) : [...curr, row.id]
+                        );
+                      }}
+                      aria-label={`Select test case ${row.title}`}
+                    />
+                  </td>
+                  <td>#{row.id}</td>
+                  <td><strong>{row.title}</strong></td>
+                  <td>{row.stepCount || "—"}</td>
+                  <td>{renderStatusChip(row.status)}</td>
+                  <td>
+                    <div className="status-cell-stack">
+                      <span>{row.confidenceLabel}</span>
+                      {row.needsReview ? (
+                        <button
+                          type="button"
+                          className="automation-chip review-chip"
+                          onClick={() => {
+                            const caseItem = selectedCases.find((item) => item.id === row.id);
+                            if (caseItem) openTestCaseEditor(caseItem);
+                          }}
+                          title="Edit this test case and review its selectors"
+                          aria-label={`Review selectors for ${row.title}`}
+                        >
+                          Review selectors
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {row.status.toLowerCase() !== "ready" ? (
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => {
+                            const caseItem = selectedCases.find((item) => item.id === row.id);
+                            if (caseItem) void updateGeneratedCaseStatus(caseItem, "ready");
+                          }}
+                          disabled={reviewingGeneratedCaseId === row.id}
+                        >
+                          {reviewingGeneratedCaseId === row.id ? "Saving..." : "Approve"}
+                        </button>
+                      ) : null}
+                      {row.status.toLowerCase() !== "rejected" ? (
+                        <button
+                          type="button"
+                          className="table-action btn-danger"
+                          onClick={() => {
+                            const caseItem = selectedCases.find((item) => item.id === row.id);
+                            if (caseItem) void updateGeneratedCaseStatus(caseItem, "rejected");
+                          }}
+                          disabled={reviewingGeneratedCaseId === row.id}
+                        >
+                          Reject
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            }) : <tr><td colSpan={7} className="muted">Generate cases to preview them here.</td></tr>}
           </tbody>
         </table>
       </Table>

@@ -263,6 +263,7 @@ export type CaseExecutionResultItem = {
 
 export type BuildExecutionReport = {
 	buildId: string;
+	buildName?: string;
 	applicationName: string;
 	targetUrl: string;
 	startedAt: number;

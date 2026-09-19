@@ -45,6 +45,7 @@ export function normalizeBuildReport(report: BuildExecutionReport | BuildExecuti
 
   return {
     buildId: report.build_id,
+    buildName: report.name,
     applicationName: report.application_name || "Application",
     targetUrl: report.target_url || "",
     startedAt: report.created_at ? new Date(report.created_at).getTime() : Date.now(),
@@ -288,7 +289,7 @@ export default function CompleteBuildReportPanel({
                 color: "var(--brand-primary, #b5121b)",
               }}
             >
-              📊 {report.buildId.startsWith("build-") ? `Build #${report.buildId.slice(-8).toUpperCase()}` : report.buildId}
+              📊 {report.buildName || (report.buildId.startsWith("build-") ? `Build #${report.buildId.slice(-6).toUpperCase()}` : report.buildId)}
             </span>
             {renderStatusChip(report.overallStatus)}
             <span className="badge badge-secondary" style={{ fontSize: "11px" }}>
