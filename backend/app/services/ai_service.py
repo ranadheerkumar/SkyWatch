@@ -1432,6 +1432,14 @@ def _build_gemini_settings(
     if require_api_key and not api_key:
         raise AIServiceError("Google Gemini API key is missing. Set GEMINI_API_KEY in backend/.env or AI & Settings.")
     model = _resolve_setting("GEMINI_MODEL", "AI_MODEL", default="gemini-flash-latest")
+    gemini_alias_map = {
+        "gemini-1.5-pro": "gemini-pro-latest",
+        "gemini-1.5-flash": "gemini-flash-latest",
+        "gemini-1.5": "gemini-flash-latest",
+        "gemini-pro": "gemini-pro-latest",
+        "gemini-flash": "gemini-flash-latest",
+    }
+    model = gemini_alias_map.get(model.lower(), model)
     base_url = _resolve_setting(
         "GEMINI_BASE_URL",
         "AI_ENDPOINT",
@@ -1669,10 +1677,21 @@ def _provider_settings_for_connection(
             f"Unsupported AI provider '{provider}'. Select one explicit provider: github_copilot, openai, azure_openai, anthropic, gemini, or local."
         )
 
+    target_model = model.strip() if model and model.strip() else resolved.model
+    if normalized_provider in {"gemini", "google"} and target_model:
+        gemini_alias_map = {
+            "gemini-1.5-pro": "gemini-pro-latest",
+            "gemini-1.5-flash": "gemini-flash-latest",
+            "gemini-1.5": "gemini-flash-latest",
+            "gemini-pro": "gemini-pro-latest",
+            "gemini-flash": "gemini-flash-latest",
+        }
+        target_model = gemini_alias_map.get(target_model.lower(), target_model)
+
     return replace(
         resolved,
         api_key=(api_key.strip() if api_key and api_key.strip() else resolved.api_key),
-        model=model.strip() if model and model.strip() else resolved.model,
+        model=target_model,
         base_url=endpoint.strip().rstrip("/") if endpoint and endpoint.strip() else resolved.base_url,
     )
 

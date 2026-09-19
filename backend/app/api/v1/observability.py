@@ -56,7 +56,6 @@ async def get_observability_metrics(
 @router.get("/health")
 async def deep_health_check(
     db: DbSession,
-    user: User = Depends(current_user),
 ) -> dict[str, Any]:
     """Deep health check probing database, LLM provider availability, and rate limiter status."""
     checks: dict[str, Any] = {}

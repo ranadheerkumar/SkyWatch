@@ -10107,6 +10107,10 @@ Example (Markdown Table):
       onTest={handleTestAiConfig}
       onSave={handleSaveAiConfig}
       onDiscoverModels={handleDiscoverAiModels}
+      auditLogs={auditLogList}
+      refreshingAuditLogs={refreshingAuditLogs}
+      onRefreshAuditLogs={() => loadAuditLogs(token)}
+      initialTab={section === "audit" ? "audit" : "ai"}
       integrations={{
         connections: integrationConnections,
         environmentConfiguration: integrationEnvironmentConfiguration,
@@ -10124,14 +10128,6 @@ Example (Markdown Table):
         onLoadAssets: handleLoadIntegrationAssets,
         onUpdateEnvironment: handleUpdateIntegrationEnvironment,
       }}
-    />
-  );
-
-  const auditView = (
-    <AuditLogViewer
-      logs={auditLogList}
-      onRefresh={() => loadAuditLogs(token)}
-      refreshing={refreshingAuditLogs}
     />
   );
 
@@ -10197,7 +10193,7 @@ Example (Markdown Table):
     recommendations: agentsView,
     systemMap: systemMapView,
     settings: settingsView,
-    audit: auditView,
+    audit: settingsView,
   };
   const navSections = navigationGroups.map((group) => ({
     id: group.id,

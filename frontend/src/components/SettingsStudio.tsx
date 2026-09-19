@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatDuration } from "../lib/formatDuration";
 import IntegrationConnectionsPanel, { type IntegrationConnectionsPanelProps } from "./IntegrationConnectionsPanel";
+import AuditLogViewer, { type AuditEntry } from "./AuditLogViewer";
 
 export type AIConfigState = {
   provider: string;
@@ -23,6 +24,8 @@ export type ModelOption = {
   description?: string;
 };
 
+export type SettingsTab = "ai" | "integrations" | "execution" | "security" | "audit";
+
 interface SettingsStudioProps {
   config: AIConfigState | null;
   onRefresh: () => Promise<void>;
@@ -38,9 +41,11 @@ interface SettingsStudioProps {
   }) => Promise<any>;
   onDiscoverModels?: (provider: string, endpoint?: string, apiKey?: string) => Promise<any>;
   integrations?: IntegrationConnectionsPanelProps;
+  auditLogs?: AuditEntry[];
+  refreshingAuditLogs?: boolean;
+  onRefreshAuditLogs?: () => Promise<void>;
+  initialTab?: SettingsTab;
 }
-
-type SettingsTab = "ai" | "integrations" | "execution" | "security";
 
 export default function SettingsStudio({
   config,
@@ -49,8 +54,18 @@ export default function SettingsStudio({
   onSave,
   onDiscoverModels,
   integrations,
+  auditLogs,
+  refreshingAuditLogs,
+  onRefreshAuditLogs,
+  initialTab,
 }: SettingsStudioProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || "ai");
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const [selectedProvider, setSelectedProvider] = useState<string>(config?.provider || "github_copilot");
   const [modelName, setModelName] = useState<string>(config?.model || "gpt-4o");
@@ -271,6 +286,16 @@ export default function SettingsStudio({
             {activeIntegrationCount} active sync pipelines
           </span>
         </div>
+
+        <div className="build-kpi-card">
+          <small>Audit Trail &amp; Governance</small>
+          <strong style={{ color: "var(--brand-primary, #b5121b)" }}>
+            {auditLogs ? `${auditLogs.length} Events` : "Active"}
+          </strong>
+          <span className="muted" style={{ fontSize: "var(--font-caption)" }}>
+            Tamper-evident audit logs
+          </span>
+        </div>
       </div>
 
       {/* Tab Navigation Toolbar */}
@@ -303,6 +328,13 @@ export default function SettingsStudio({
             onClick={() => setActiveTab("security")}
           >
             🛡️ Privacy &amp; Security
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "audit" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("audit")}
+          >
+            📜 Audit Logs {auditLogs?.length ? `(${auditLogs.length})` : ""}
           </button>
         </div>
       </div>
@@ -636,6 +668,17 @@ export default function SettingsStudio({
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab 5: System Audit Trail & Governance */}
+      {activeTab === "audit" && (
+        <div className="settings-studio-card">
+          <AuditLogViewer
+            logs={auditLogs || []}
+            onRefresh={onRefreshAuditLogs || (async () => {})}
+            refreshing={Boolean(refreshingAuditLogs)}
+          />
         </div>
       )}
     </div>

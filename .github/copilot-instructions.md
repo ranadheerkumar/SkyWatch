@@ -60,9 +60,10 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
 - Local Application Startup & Service Topology:
   - Backend: FastAPI/Uvicorn on `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000`).
   - Frontend: Next.js on `http://localhost:3000` (`npm run dev` from `frontend/`).
-  - Health & Metrics Endpoints: `GET /api/v1/observability/health` and `GET /api/v1/observability/metrics`.
+  - Health & Metrics Endpoints: `GET /api/v1/observability/health` (publicly accessible deep health probe, no auth required) and `GET /api/v1/observability/metrics` (authenticated metrics).
 - UI Navigation & Architecture:
-  - Core navigation is consolidated into 7 focused product pillars: `dashboard`, `aiGenerator`, `systemMap`, `execution`, `runHistory`, `defects`, `reports`, and `settings` (with embedded audit and AI settings).
+  - Core navigation is consolidated into focused product pillars: `dashboard`, `aiGenerator`, `systemMap`, `execution`, `runHistory`, `defects`, `reports`, and `settings` (with embedded audit logs and AI settings).
+  - Audit logs are maintained as a dedicated tab inside `SettingsStudio.tsx` (`"ai" | "integrations" | "execution" | "security" | "audit"`), removing sidebar clutter while retaining `/audit` route resolution to Settings Studio.
   - Legacy routes (`/projects`, `/applications`, `/test-cases`, `/test-suites`, `/evidence`, `/mapping`) resolve to their primary pillar sections to avoid empty wrapper pages.
 - Build Report Parity & Canonical Backend Synchronization:
   - Post-execution build reports MUST query `GET /api/v1/execution/builds/{build_id}/detail` upon batch completion. Do not display diverged client-synthesized reports.

@@ -10,7 +10,6 @@ export const navigationItems: Array<{ id: Section; label: string; icon: AppIconN
   { id: "defects", label: "Defects", icon: "defects" },
   { id: "reports", label: "Reports & Analytics", icon: "reports" },
   { id: "settings", label: "AI & Settings", icon: "settings" },
-  { id: "audit", label: "Audit Logs", icon: "audit" },
 ];
 
 export const navigationGroups = [
@@ -18,7 +17,7 @@ export const navigationGroups = [
   { id: "ai-workspace", label: "AI Workspace", sections: ["aiGenerator", "systemMap", "agents"] as Section[] },
   { id: "test-execution", label: "Test Execution", sections: ["execution", "runHistory"] as Section[] },
   { id: "reporting", label: "Reporting & Analytics", sections: ["defects", "reports"] as Section[] },
-  { id: "administration", label: "Administration", sections: ["settings", "audit"] as Section[] },
+  { id: "administration", label: "Administration", sections: ["settings"] as Section[] },
 ];
 
 export const sectionPaths: Record<Section, string> = {

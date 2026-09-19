@@ -1,8 +1,23 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.5`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.6`.
 
-## [2.0.5] - 2026-09-19
+## [2.0.6] - 2026-09-19
+
+### Fixed
+- **Observability Deep Health Check Authorization**:
+  - Removed mandatory `user: User = Depends(current_user)` authentication requirement from `GET /api/v1/observability/health`.
+  - Health check endpoint is now publicly accessible for container orchestrators, external uptime probes, and unauthenticated frontend status badges.
+  - Added regression unit tests in `backend/tests/test_observability.py` validating public health access while maintaining authentication enforcement on `GET /api/v1/observability/metrics`.
+- **Legacy Gemini Model Alias Normalization**:
+  - Added automatic fallback mapping in `ai_service.py` for legacy/deprecated model names (`gemini-1.5-pro` -> `gemini-pro-latest`, `gemini-1.5-flash` -> `gemini-flash-latest`, etc.) to prevent 404 connection errors when testing or generating with older configuration payloads.
+
+### Changed
+- **Navigation & Page Structure Streamlining**:
+  - Consolidated system audit trail and governance into a dedicated "📜 Audit Logs" tab within `SettingsStudio.tsx` (`"ai" | "integrations" | "execution" | "security" | "audit"`).
+  - Removed standalone `Audit Logs` item from the sidebar navigation and administration group, eliminating redundant admin clutter.
+  - Retained clean routing so `/audit` and direct links automatically open `SettingsStudio` with the Audit Logs tab pre-selected.
+
 
 ### Added
 - **Grouped Scenario Consolidation Workspace**:
