@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.1`.
+
+## [2.0.1] - 2026-09-19
+
+### Changed
+- **Delivery Policy & Copilot Instructions Alignment**:
+  - Enforced mandatory application SemVer prefix in all Git commit messages (e.g. `vX.Y.Z: ...` or `[vX.Y.Z] ...`) to guarantee release traceability across workflows and prevent version hallucinations.
+  - Added continuous instruction synchronization policy in `.github/copilot-instructions.md` ensuring instructions are continuously kept aligned with architecture markdown docs.
+  - Documented local application startup topology and verification endpoints in project contracts.
 
 ## [2.0.0] - 2026-09-18
 

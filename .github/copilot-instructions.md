@@ -9,8 +9,8 @@ When completing a requested change to frontend/UI code or application source cod
 3. Run `node scripts/verify-version.mjs --require-bump` before committing; CI enforces the committed version increase with `node scripts/verify-version.mjs --require-history-bump`.
 4. Review `git status`, `git diff --check`, and `git diff --stat`.
 5. Stage only the intended source, test, configuration, and documentation files.
-6. Create a concise reviewable commit.
-7. Push the commit to the current branch's configured upstream remote (`origin/AutomationTool_POC`). Do NOT sync, merge, or push changes to `AutomationTool_POC_lkurra`.
+6. Create a concise reviewable commit prefixed with the application SemVer (e.g. `vX.Y.Z: <type>(<scope>): <summary>` or `vX.Y.Z: <summary>`). Every commit message MUST explicitly include the version prefix matching `frontend/package.json` (e.g. `v2.0.1: ...`) to ensure release traceability, keep commit logs standardized, and prevent version hallucinations.
+7. Push the commit to the current branch's configured upstream remote (`origin/develop` or `origin/AutomationTool_POC`). Do NOT sync, merge, or push changes to `AutomationTool_POC_lkurra`.
 8. Confirm the local branch and configured upstream resolve to the same commit, then report the commit and validation results.
 
 Do not automatically publish when the user explicitly asks to keep changes local, when validation exposes unresolved failures, when the branch has no configured upstream, or when authentication/conflict issues block a safe push. Report the blocker and exact next command instead.
@@ -28,6 +28,13 @@ When the user says to focus on development and fixes for now:
 
 Documentation-only changes follow the normal commit workflow unless the user asks for immediate publication. Changes that include frontend/UI or application source code use the automatic publishing workflow above.
 
+## Continuous instruction and documentation alignment
+
+Always keep `.github/copilot-instructions.md` synchronized and updated as new features, architectural decisions, and APIs are introduced:
+- Whenever new systems, engines, integrations, or workflows are added, update `.github/copilot-instructions.md` alongside the canonical documentation in `docs/`.
+- Ground all conventions and contracts in `.github/copilot-instructions.md` so that future agent sessions stay aligned with existing patterns and never hallucinate deprecated, assumed, or non-existent interfaces.
+- Ensure every commit message adheres to the version prefix rule (`vX.Y.Z: <type>(<scope>): <description>`).
+
 ## Current project contracts
 
 - Treat `docs/` as the canonical documentation tree. Do not recreate the removed root `doc/` tree.
@@ -44,3 +51,7 @@ Documentation-only changes follow the normal commit workflow unless the user ask
 - Observability & Rate Limiting (`docs/OBSERVABILITY_GUIDE.md`): Token bucket rate limiting per endpoint group, circuit breaking, and aggregated metric telemetry (`/api/v1/observability/metrics`).
 - Multi-LLM Architecture: Dynamic cascade supporting Google Gemini, GitHub Copilot, OpenAI, Anthropic, and Azure based on available environment credentials with zero generic fallback lock-in.
 - Enterprise ALM Bridge (`docs/JIRA_QTEST_INTEGRATION_GUIDE.md`): Jira Cloud REST API v3 with Atlassian Document Format (ADF v1), bi-directional issue linking, multipart attachment uploads, and workflow transitions; Tricentis qTest SaaS Build API hierarchy (`/projects/{projectId}/builds`), auto-test-logs execution reporting, and dynamic custom field validation. Respect `ENABLE_JIRA_WRITE` and `ENABLE_QTEST_WRITE` safety controls.
+- Local Application Startup & Service Topology:
+  - Backend: FastAPI/Uvicorn on `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000`).
+  - Frontend: Next.js on `http://localhost:3000` (`npm run dev` from `frontend/`).
+  - Health & Metrics Endpoints: `GET /api/v1/observability/health` and `GET /api/v1/observability/metrics`.
