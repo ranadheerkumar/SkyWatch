@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.2`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.3`.
+
+## [2.0.3] - 2026-09-19
+
+### Fixed
+- **Google Gemini Active Models & Live Model Discovery**:
+  - Replaced deprecated `gemini-1.5-pro`, `gemini-1.5-flash`, and `gemini-2.0-flash` (which return 404 on Google API) with active supported models: `gemini-flash-latest` (default), `gemini-pro-latest`, `gemini-3.7-flash`, `gemini-2.5-flash`, and `gemini-2.5-pro`.
+  - Added live model discovery for Google Gemini in `POST /api/v1/settings/ai-models`.
+  - Updated connectivity probe token budget and response parsing to properly support thinking models with thought signatures.
 
 ## [2.0.2] - 2026-09-19
 

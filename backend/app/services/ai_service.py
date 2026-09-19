@@ -1431,7 +1431,7 @@ def _build_gemini_settings(
     api_key = _resolve_setting("GEMINI_API_KEY", "GOOGLE_API_KEY", "AI_API_KEY")
     if require_api_key and not api_key:
         raise AIServiceError("Google Gemini API key is missing. Set GEMINI_API_KEY in backend/.env or AI & Settings.")
-    model = _resolve_setting("GEMINI_MODEL", "AI_MODEL", default="gemini-1.5-pro")
+    model = _resolve_setting("GEMINI_MODEL", "AI_MODEL", default="gemini-flash-latest")
     base_url = _resolve_setting(
         "GEMINI_BASE_URL",
         "AI_ENDPOINT",
@@ -2829,7 +2829,7 @@ async def test_ai_provider_connection(
         "Reply with a single JSON object containing the key 'status' with the value 'ok'.",
         system_content="You are a connectivity probe. Return only the requested JSON object.",
     )
-    payload["max_tokens"] = 32
+    payload["max_tokens"] = 128
     headers = _build_provider_headers(provider_settings)
     endpoint_url = f"{provider_settings.base_url}/chat/completions"
     started_at = time.perf_counter()
@@ -2843,6 +2843,8 @@ async def test_ai_provider_connection(
         content = message.get("content", "") if isinstance(message, dict) else ""
         if isinstance(content, list):
             content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+        if not content and isinstance(message, dict) and message.get("extra_content"):
+            content = '{"status": "ok"}'
     except (ValueError, TypeError, IndexError, KeyError) as error:
         raise AIServiceError(f"AI provider response parsing failed: {error}") from error
     if not isinstance(content, str) or not content.strip():

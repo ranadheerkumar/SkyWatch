@@ -132,9 +132,11 @@ DEFAULT_MODELS_BY_PROVIDER: dict[str, list[dict[str, str]]] = {
         {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "family": "Anthropic", "description": "Maximum reasoning capability"},
     ],
     "gemini": [
-        {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro", "family": "Google", "description": "2M token context reasoning engine"},
-        {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash", "family": "Google", "description": "High-speed multimodal model"},
-        {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "family": "Google", "description": "Next-gen real-time reasoning model"},
+        {"id": "gemini-flash-latest", "name": "Gemini Flash Latest (Recommended)", "family": "Google", "description": "High-throughput multimodal flash model"},
+        {"id": "gemini-pro-latest", "name": "Gemini Pro Latest", "family": "Google", "description": "Flagship multi-modal reasoning engine"},
+        {"id": "gemini-3.7-flash", "name": "Gemini 3.7 Flash", "family": "Google", "description": "High-speed multimodal flash reasoning"},
+        {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "family": "Google", "description": "Mid-size multimodal model with 1M context"},
+        {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "family": "Google", "description": "High-capacity reasoning engine with thinking capability"},
     ],
     "local": [
         {"id": "local-model", "name": "Default Local Model", "family": "Custom", "description": "Custom inference server model"},
@@ -290,6 +292,28 @@ async def discover_ai_models(
                         for m in resp.json().get("data", [])
                         if m.get("id") and ("gpt" in m.get("id").lower() or "o1" in m.get("id").lower() or "o3" in m.get("id").lower())
                     ]
+                    if models:
+                        return {"provider": provider, "source": "live_api", "models": models}
+        except Exception:
+            pass
+
+    elif provider == "gemini" and api_key:
+        endpoint = request.endpoint or "https://generativelanguage.googleapis.com/v1beta/openai"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                resp = await client.get(f"{endpoint.rstrip('/')}/models", headers=headers)
+                if resp.status_code == 200:
+                    models = []
+                    for m in resp.json().get("data", []):
+                        m_id = str(m.get("id") or "").replace("models/", "")
+                        if m_id and ("flash" in m_id.lower() or "pro" in m_id.lower()) and "tts" not in m_id.lower() and "image" not in m_id.lower() and "audio" not in m_id.lower() and "preview-09" not in m_id.lower():
+                            models.append({
+                                "id": m_id,
+                                "name": m_id,
+                                "family": "Google",
+                                "description": f"Google Gemini model ({m_id})",
+                            })
                     if models:
                         return {"provider": provider, "source": "live_api", "models": models}
         except Exception:

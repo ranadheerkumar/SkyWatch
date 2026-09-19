@@ -135,8 +135,11 @@ export default function SettingsStudio({
       ]);
     } else if (provider === "gemini") {
       setAvailableModels([
-        { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", family: "Google", description: "2M context reasoning" },
-        { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", family: "Google", description: "High-speed multimodal" },
+        { id: "gemini-flash-latest", name: "Gemini Flash Latest (Recommended)", family: "Google", description: "High-throughput multimodal flash model" },
+        { id: "gemini-pro-latest", name: "Gemini Pro Latest", family: "Google", description: "Flagship multi-modal reasoning engine" },
+        { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", family: "Google", description: "High-speed multimodal flash reasoning" },
+        { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", family: "Google", description: "Mid-size multimodal model with 1M context" },
+        { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", family: "Google", description: "High-capacity reasoning engine with thinking capability" },
       ]);
     } else {
       setAvailableModels([{ id: "gpt-4o", name: "GPT-4o", family: "Default", description: "Standard LLM model" }]);
@@ -154,7 +157,7 @@ export default function SettingsStudio({
       openai: { model: "gpt-4o", endpoint: "https://api.openai.com/v1" },
       azure_openai: { model: "gpt-4o", endpoint: "" },
       anthropic: { model: "claude-3-5-sonnet-20241022", endpoint: "https://api.anthropic.com/v1" },
-      gemini: { model: "gemini-1.5-pro", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai" },
+      gemini: { model: "gemini-flash-latest", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai" },
       local: { model: "local-model", endpoint: "http://127.0.0.1:8080/v1" },
     };
     const nextDefaults = defaults[newProvider] ?? defaults.github_copilot;
