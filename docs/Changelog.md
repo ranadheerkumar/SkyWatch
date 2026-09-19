@@ -1,6 +1,22 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.8`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.9`.
+
+## [2.0.9] - 2026-09-19
+
+### Added
+- **100% Open-Source LLM Compatibility & Zero Third-Party Lock**:
+  - Enabled native local open-source inference supporting Ollama (`http://127.0.0.1:11434/v1`), vLLM, and LocalAI with Meta Llama 3.2, Mistral, DeepSeek Coder, and Qwen 2.5 Coder.
+  - Added built-in deterministic open-source QA synthesizer (`offline-simulator`), enabling 100% offline, credential-free scenario design without external third-party API dependencies.
+  - Graceful auto-detection: when no external third-party API keys are set, the platform automatically defaults to local open-source mode rather than failing on third-party credentials.
+- **Enterprise-Grade End-to-End Test Suite (`backend/tests/test_enterprise_e2e.py`)**:
+  - Added automated end-to-end integration test validating the complete enterprise QA loop: health checks, application onboarding, local LLM scenario synthesis, TypeScript Playwright spec & suite compilation, execution batch creation, run lifecycle tracking, and ALM defect logging.
+
+### Changed
+- **UI Simplification & De-Cluttering**:
+  - Removed low-level API gateway latency tables from the primary Quality Reports dashboard (`reportsView`), restoring an uncluttered executive view focused on release intelligence, pass rates, and defect trends.
+  - Relocated system observability and rate-limiter telemetry to `SettingsStudio` with collapsible route latency diagnostics.
+  - Preserved concise navigation without adding redundant pages or cognitive complexity.
 
 ## [2.0.8] - 2026-09-19
 

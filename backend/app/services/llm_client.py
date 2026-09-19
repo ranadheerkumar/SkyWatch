@@ -147,7 +147,7 @@ def _resolve_provider_config(
         elif anthropic_key:
             provider = "anthropic"
         else:
-            provider = "github_copilot"
+            provider = "local"
 
     # Specific Provider Defaults
     if provider in {"gemini", "google"}:
@@ -180,6 +180,16 @@ def _resolve_provider_config(
         api_key = anthropic_key or api_key
         if not model:
             model = "claude-3-5-sonnet-20241022"
+
+    elif provider in {"local", "ollama", "vllm", "custom"}:
+        provider = "local"
+        base_url = os.getenv(
+            "LOCAL_LLM_URL",
+            os.getenv("OLLAMA_BASE_URL", getattr(settings, "AI_ENDPOINT", "http://127.0.0.1:11434/v1")),
+        )
+        if not model or model in {"gpt-4o", "gpt-4.1"}:
+            model = os.getenv("LOCAL_MODEL", "llama3.2")
+        api_key = api_key or "local-key"
 
     return LLMProviderConfig(
         provider=provider,

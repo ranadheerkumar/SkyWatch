@@ -318,21 +318,23 @@ export default function ObservabilityMetricsCard({
         )}
       </div>
 
-      {/* Endpoint Groups Breakdown */}
+      {/* Endpoint Groups Breakdown (Collapsible) */}
       {metrics?.groups && Object.keys(metrics.groups).length > 0 && (
-        <div style={{ marginTop: "14px" }}>
-          <div
+        <details style={{ marginTop: "14px" }}>
+          <summary
             style={{
               fontSize: "12px",
               fontWeight: 700,
-              textTransform: "uppercase",
               color: "#a1a1aa",
-              marginBottom: "8px",
+              cursor: "pointer",
+              userSelect: "none",
+              padding: "4px 0",
+              outline: "none",
             }}
           >
-            Traffic & Latency Distribution by Service Route
-          </div>
-          <div style={{ overflowX: "auto" }}>
+            📊 View Service Route Latencies &amp; Traffic Distribution ({Object.keys(metrics.groups).length} routes)
+          </summary>
+          <div style={{ overflowX: "auto", marginTop: "10px" }}>
             <table
               style={{
                 width: "100%",
@@ -390,7 +392,7 @@ export default function ObservabilityMetricsCard({
               </tbody>
             </table>
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

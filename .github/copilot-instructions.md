@@ -84,15 +84,16 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - Visual Regression Audits: Invokes `POST /api/v1/orchestrator/visual-audit` across Desktop (`1920x1080`), Tablet (`768x1024`), and Mobile (`375x812`) viewports with DOM tree structural hashing and pixel diff analysis.
   - API Contract Testing Audits: Invokes `POST /api/v1/orchestrator/api-audit` to validate OpenAPI schema conformance, boundary payload resilience, and SLA response time benchmarking.
   - Autonomous QA Campaigns: Invokes `POST /api/v1/orchestrator/campaigns` and tracks progress via `GET /api/v1/orchestrator/campaigns/{id}` with 1-5 parallel agent workers, auto-healing, and visual audit toggles.
-- System Observability & Self-Learning Telemetry (`frontend/src/components/ObservabilityMetricsCard.tsx`):
-  - Displayed in Quality Reports & Release Intelligence.
-  - Gateway Telemetry: Queries `GET /api/v1/observability/metrics` for live API throughput, error rates, p95 latency distributions, and active rate limiter buckets.
-  - Self-Learning Memory: Queries `GET /api/v1/ai-generation/self-learning/{app_id}` for learned locator counts, total locator hit frequencies, and self-healing retention statistics.
-- Playwright Test Suite Generator:
-  - Application Suite Export: Invokes `GET /api/v1/test-cases/application/{id}/export-playwright-suite` to generate clean, compiled TypeScript Playwright test specs with multi-spec tabs, copy-all, and download options.
-  - Single Spec Export & Git Push: Invokes `GET /api/v1/test-cases/{id}/export-playwright` and `POST /api/v1/test-cases/{id}/git-push` to persist specs to `tests/generated/`.
-- OpenAPI Cleanliness & Schema Hygiene:
-  - Dual-method routes supporting `HEAD` and `GET` or mutation block middleware must set `include_in_schema=False` on auxiliary decorators to prevent OpenAPI duplicate Operation ID schema validation warnings.
+- 100% Open-Source LLM Architecture (Zero Third-Party Lock):
+  - SkyWatch natively supports local open-source inference servers (Ollama on `http://127.0.0.1:11434/v1`, vLLM, and LocalAI) with open-source foundation models (`llama3.2`, `mistral`, `deepseek-coder`, `qwen2.5-coder`).
+  - A deterministic built-in open-source test synthesizer (`offline-simulator`) enables complete offline test case design with structured step parameterization without requiring external third-party accounts, proprietary SDKs, or paid subscriptions.
+  - Dynamic provider auto-detection automatically defaults to `local` open-source mode when external API keys are not detected in the environment.
+- Enterprise-Grade E2E Test Suite (`backend/tests/test_enterprise_e2e.py`):
+  - Enforces continuous automated validation of the end-to-end QA lifecycle: deep health checks, application creation, open-source scenario generation, single and full-suite TypeScript Playwright compilation, execution lifecycle tracking, and ALM defect logging.
+- UI Simplification & Anti-Clutter Policy:
+  - Quality Reports & Release Intelligence (`reportsView`) must remain an uncluttered executive surface focused on release health, pass rates, defect density, and execution runs.
+  - Low-level developer plumbing (e.g. raw token bucket tables, endpoint group rate limiter distributions) must never clutter business report views; it is housed under `SettingsStudio` with collapsible route details.
+  - Do not proliferate new top-level navigation items or redundant wrapper sub-views; maintain a tight, enterprise-grade, clean layout that is simple and intuitive to operate.
 - Dynamic Resilience:
   - Avoid hardcoded CSS selectors (e.g. `#user_email`). Always use resilient multi-selector fallback chains (`input[type=email], #email, [name=email]`, etc.).
   - Starter cases must dynamically reference the active application name and target URL.

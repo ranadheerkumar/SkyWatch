@@ -45,7 +45,7 @@ def _provider_endpoint(provider: str) -> str:
     if normalized_provider == "anthropic":
         return "https://api.anthropic.com/v1"
     if normalized_provider == "local":
-        return "http://127.0.0.1:8080/v1"
+        return os.getenv("LOCAL_LLM_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"))
     return "https://api.openai.com/v1"
 
 
@@ -139,7 +139,12 @@ DEFAULT_MODELS_BY_PROVIDER: dict[str, list[dict[str, str]]] = {
         {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "family": "Google", "description": "High-capacity reasoning engine with thinking capability"},
     ],
     "local": [
-        {"id": "local-model", "name": "Default Local Model", "family": "Custom", "description": "Custom inference server model"},
+        {"id": "llama3.2", "name": "Llama 3.2 (Meta Open Source)", "family": "Meta / Ollama", "description": "High-efficiency open-source local LLM"},
+        {"id": "mistral", "name": "Mistral 7B / Nemo", "family": "Mistral AI / Ollama", "description": "Robust open-source reasoning model"},
+        {"id": "deepseek-coder", "name": "DeepSeek Coder", "family": "DeepSeek / Ollama", "description": "Open-source specialized coding & QA model"},
+        {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder", "family": "Alibaba / Ollama", "description": "State-of-the-art open-source code generator"},
+        {"id": "offline-simulator", "name": "Built-in Open Source Synthesizer", "family": "SkyWatch Core", "description": "100% offline, zero-dependency test generator requiring no external servers"},
+        {"id": "local-model", "name": "Custom Local Endpoint", "family": "Local / Custom", "description": "Generic OpenAI-compatible local model"},
     ],
 }
 

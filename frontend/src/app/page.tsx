@@ -9536,7 +9536,6 @@ Example (Markdown Table):
         onAction={() => { void loadDashboardData(token, app?.name); notify("Report data refreshed"); }}
         actionDisabled={refreshingData}
       />
-      <ObservabilityMetricsCard token={token} appId={app?.id} appName={app?.name} />
       <QualityReportsWorkspace
         appName={app?.name ?? WORKSPACE_NAME}
         application={app}
@@ -10313,8 +10312,10 @@ Example (Markdown Table):
   );
 
   const settingsView = (
-    <SettingsStudio
-      config={aiConfigState}
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <ObservabilityMetricsCard token={token} appId={app?.id} appName={app?.name} />
+      <SettingsStudio
+        config={aiConfigState}
       onRefresh={() => loadAiConfiguration(token)}
       onTest={handleTestAiConfig}
       onSave={handleSaveAiConfig}
@@ -10341,6 +10342,7 @@ Example (Markdown Table):
         onUpdateEnvironment: handleUpdateIntegrationEnvironment,
       }}
     />
+    </div>
   );
 
   const systemMapView = (
