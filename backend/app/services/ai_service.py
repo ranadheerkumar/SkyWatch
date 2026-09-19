@@ -1896,12 +1896,18 @@ async def _post_chat_completion(
     *,
     max_retries: int = 2,
 ) -> httpx.Response:
+    # Gemini free tier has strict rate limits (20 req/min); allow more retries with longer backoff
+    effective_retries = max_retries
+    is_gemini = settings.provider in {"gemini", "google"}
+    if is_gemini:
+        effective_retries = max(max_retries, 4)
+
     current_payload = payload
-    for attempt in range(max_retries + 1):
+    for attempt in range(effective_retries + 1):
         try:
             response = await client.post(endpoint, headers=headers, json=current_payload)
         except httpx.HTTPError as error:
-            if attempt < max_retries:
+            if attempt < effective_retries:
                 await asyncio.sleep(1.0 * (attempt + 1))
                 continue
             raise AIServiceError(
@@ -1915,16 +1921,24 @@ async def _post_chat_completion(
                 continue
 
         if response.status_code == 429:
-            retry_after = 1.5 * (attempt + 1)
+            # Parse Retry-After header
             raw_retry_header = response.headers.get("retry-after", "")
             try:
                 header_val = float(raw_retry_header) if raw_retry_header else 0.0
             except ValueError:
                 header_val = 0.0
-            if header_val > 5.0:
-                raise AIServiceError(f"AI provider {settings.provider}:{settings.model} is rate-limited (Retry-After: {raw_retry_header}s).")
-            retry_after = min(max(retry_after, header_val), 3.0)
-            if attempt < max_retries:
+
+            # For Gemini free tier, use progressive backoff (5s, 10s, 15s, 20s, 30s)
+            if is_gemini:
+                gemini_backoff = min(5.0 * (attempt + 1), 30.0)
+                retry_after = max(gemini_backoff, header_val) if header_val > 0 else gemini_backoff
+            else:
+                retry_after = 1.5 * (attempt + 1)
+                if header_val > 30.0:
+                    raise AIServiceError(_provider_rate_limit_message(response, settings))
+                retry_after = min(max(retry_after, header_val), 10.0)
+
+            if attempt < effective_retries:
                 log_event(
                     logger,
                     "ai_rate_limit_backoff",
@@ -1935,9 +1949,9 @@ async def _post_chat_completion(
                 )
                 await asyncio.sleep(retry_after)
                 continue
-            raise AIServiceError(_provider_http_error_message(response, settings))
+            raise AIServiceError(_provider_rate_limit_message(response, settings))
 
-        if response.status_code in {500, 502, 503, 504} and attempt < max_retries:
+        if response.status_code in {500, 502, 503, 504} and attempt < effective_retries:
             await asyncio.sleep(1.5 * (attempt + 1))
             continue
 
@@ -2793,7 +2807,27 @@ async def resolve_action_with_agent(
     return None
 
 
+def _provider_rate_limit_message(response: httpx.Response, settings: AIProviderSettings) -> str:
+    """Produce a clean, actionable message for 429 rate-limit errors."""
+    provider_name = settings.provider.replace("_", " ").title()
+    if settings.provider in {"gemini", "google"}:
+        return (
+            f"Gemini API rate limit exceeded for model '{settings.model}'. "
+            "The free tier allows ~20 requests/minute. "
+            "Options: (1) Wait 60 seconds and retry, (2) Upgrade to a paid plan at https://ai.google.dev/pricing, "
+            "or (3) Switch to 'Local / Ollama' provider for unlimited offline generation."
+        )
+    return (
+        f"{provider_name} rate limit exceeded for model '{settings.model}'. "
+        "Please wait a moment and retry, or switch to a different provider."
+    )
+
+
 def _provider_http_error_message(response: httpx.Response, settings: AIProviderSettings) -> str:
+    # For 429s, delegate to the rate-limit-specific message
+    if response.status_code == 429:
+        return _provider_rate_limit_message(response, settings)
+
     detail = response.text.strip()
     try:
         error_json = response.json()
@@ -2967,6 +3001,23 @@ async def _request_provider_generation(settings: AIProviderSettings, prompt: str
         if settings.provider == "local":
             logger.info("Local LLM server connection failed (%s); using built-in open-source test synthesizer", net_err)
             return _synthesize_local_open_source_cases(prompt)
+        raise
+    except AIServiceError as ai_err:
+        error_msg = str(ai_err).lower()
+        if "rate limit" in error_msg or "429" in error_msg or "quota" in error_msg:
+            logger.warning("Provider %s:%s rate-limited; falling back to built-in synthesizer. Error: %s", settings.provider, settings.model, ai_err)
+            result = _synthesize_local_open_source_cases(prompt)
+            result = AIGeneratedTestCaseSet(
+                test_cases=result.test_cases,
+                generation_mode=result.generation_mode,
+                summary=result.summary,
+                generation_note=(
+                    f"⚠️ {settings.provider.replace('_', ' ').title()} rate limit hit — generated using built-in open-source engine. "
+                    f"Wait 60s and retry, or switch to Local/Ollama for unlimited generation."
+                ),
+                generation_provider=f"fallback:local (rate-limited:{settings.provider}:{settings.model})",
+            )
+            return result
         raise
 
     data = response.json()

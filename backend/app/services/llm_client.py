@@ -362,13 +362,16 @@ class LLMClient:
         max_retries: int,
     ) -> httpx.Response:
         """POST with retry on transient failures and rate limits."""
+        is_gemini = self.config.provider in {"gemini", "google"}
+        effective_retries = max(max_retries, 4) if is_gemini else max_retries
+
         current_payload = payload
-        for attempt in range(max_retries + 1):
+        for attempt in range(effective_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=float(timeout_seconds)) as client:
                     response = await client.post(endpoint, headers=headers, json=current_payload)
             except httpx.HTTPError as error:
-                if attempt < max_retries:
+                if attempt < effective_retries:
                     await asyncio.sleep(1.0 * (attempt + 1))
                     continue
                 raise LLMClientError(
@@ -381,17 +384,28 @@ class LLMClient:
                     current_payload = {k: v for k, v in current_payload.items() if k != "response_format"}
                     continue
 
-            # Rate limiting
+            # Rate limiting with Gemini-aware progressive backoff
             if response.status_code == 429:
-                if attempt < max_retries:
-                    retry_after = min(float(response.headers.get("retry-after", "2")), 5.0)
-                    logger.warning("LLM rate limited, retrying in %.1fs", retry_after)
+                if attempt < effective_retries:
+                    if is_gemini:
+                        retry_after = min(5.0 * (attempt + 1), 30.0)
+                    else:
+                        retry_after = min(float(response.headers.get("retry-after", "2")), 10.0)
+                    logger.warning("LLM rate limited (%s:%s), retrying in %.1fs (attempt %d/%d)",
+                                   self.config.provider, self.config.model, retry_after, attempt + 1, effective_retries)
                     await asyncio.sleep(retry_after)
                     continue
-                raise LLMClientError(f"LLM provider rate limited after {max_retries} retries")
+                if is_gemini:
+                    raise LLMClientError(
+                        f"Gemini API rate limit exceeded for model '{self.config.model}'. "
+                        "The free tier allows ~20 requests/minute. "
+                        "Wait 60 seconds and retry, upgrade at https://ai.google.dev/pricing, "
+                        "or switch to 'Local / Ollama' for unlimited generation."
+                    )
+                raise LLMClientError(f"LLM provider rate limited after {effective_retries} retries")
 
             # Server errors
-            if response.status_code in {500, 502, 503, 504} and attempt < max_retries:
+            if response.status_code in {500, 502, 503, 504} and attempt < effective_retries:
                 await asyncio.sleep(1.5 * (attempt + 1))
                 continue
 
@@ -405,6 +419,7 @@ class LLMClient:
             return response
 
         raise LLMClientError("LLM provider exceeded retry attempts")
+
 
     def _parse_response(self, response: httpx.Response, duration_ms: float) -> LLMResponse:
         """Parse the HTTP response into a structured LLMResponse."""
