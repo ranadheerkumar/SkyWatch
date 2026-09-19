@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 
 from app.api.dependencies import DbSession, current_user
@@ -108,3 +108,30 @@ async def deep_health_check(
         "environment": settings.ENVIRONMENT,
         "checks": checks,
     }
+
+
+@router.get("/logs")
+async def get_system_logs(
+    limit: int = Query(100, ge=1, le=500, description="Number of recent log lines to retrieve"),
+    level: str | None = Query(None, description="Optional log level filter: DEBUG, INFO, WARNING, ERROR"),
+    search: str | None = Query(None, description="Keyword filter for message or logger name"),
+    since: float | None = Query(None, description="Fetch records after this epoch timestamp"),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Retrieve recent application log records from the in-memory ring buffer."""
+    from app.core.logging import get_recent_system_logs
+
+    logs = get_recent_system_logs(
+        limit=limit,
+        level=level,
+        search=search,
+        since_timestamp=since,
+    )
+    return {
+        "total": len(logs),
+        "limit": limit,
+        "level_filter": level,
+        "search_filter": search,
+        "logs": logs,
+    }
+

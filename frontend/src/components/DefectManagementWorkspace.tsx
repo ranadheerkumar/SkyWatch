@@ -507,7 +507,7 @@ export default function DefectManagementWorkspace({
         </div>
 
         {showFilters && (
-          <div className="run-history-filter-grid" style={{ marginTop: "12px" }}>
+          <div className="run-history-filter-grid" style={{ marginTop: "6px" }}>
             <label className="capture-label">
               Search defects
               <input

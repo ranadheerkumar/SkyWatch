@@ -124,3 +124,16 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
     - `frontend/src/lib/api-client.ts`: Unified typed client wrappers for execution, runs, suites, and reports.
     - `frontend/src/components/ui/DashboardWidgets.tsx`: Reusable KPI cards, distribution charts, and timeline widgets.
     - `frontend/src/components/ExecutionDiagnosticsPanel.tsx`: Live console log streaming, step telemetry, and run diagnostics.
+- Enterprise Logging & AI Generation Observability Subsystem (`docs/LOGGING_AND_OBSERVABILITY.md`):
+  - Persistent AI Generation Logs: `GenerationLogger` (`app/services/generation_logger.py`) records all lifecycle events (intake, target DOM discovery, planner blueprints, LLM tokens/latency, 429 rate limit progressive backoffs, test data synthesis, and case persistence). Stored persistently in `job.result["logs"]` and accessible via `GET /api/v1/ai-generation/jobs/{job_id}/logs`.
+  - Rotating File Handlers: `backend/logs/skywatch.log` (5MB, 5 backups), `backend/logs/ai_generation.log` (10MB, 5 backups), and `backend/logs/errors.log` (5MB, 5 backups).
+  - Security & Credential Redaction: `SecretMaskingFilter` automatically redacts Gemini keys (`AIza...`, `AQ....`), OpenAI/Anthropic keys (`sk-...`), GitHub tokens (`ghp_...`), Bearer tokens, and JSON passwords across all log handlers.
+  - In-Memory Ring Buffer & Observability API: `RingBufferLogHandler` retains the latest 1,000 application log records in memory, queryable via `GET /api/v1/observability/logs`.
+  - Frontend UI Consoles: `GenerationLogViewer` in AI Scenario Studio for live streaming generation logs, and `SystemLogViewer` under `SettingsStudio` ("🖥️ System Logs") for real-time server diagnostics.
+- Enterprise Layout, Header & Filter Density Architecture Standards:
+  - Header Constraint: `.app-header` height is strictly 48px (`--header-height: 48px`), `.header-left` has `flex-wrap: nowrap;` and `overflow-x: auto` with hidden scrollbars to prevent header ballooning or vertical layout jitter across laptops and zoomed displays.
+  - Logo Preservation: `TractorSupplyLogo` (`frontend/src/components/navigation/TractorSupplyLogo.tsx`) must never be modified or replaced.
+  - High-Density Filter Toolbars: All listing and analytics pages must use single-row compact filter toolbars (38px-40px height) rather than tall stacked form grids.
+  - Executive Header Strips: Page hero banners must remain sleek (max 48px-52px height) with inline right-aligned primary actions to maximize above-the-fold data visibility.
+  - Settings & Audits Hierarchy: Tab navigation must always be positioned at the top of the workspace.
+

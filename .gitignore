@@ -27,6 +27,7 @@ frontend/CLAUDE.md
 
 # Logs and artifacts
 *.log
+backend/logs/
 coverage/
 /tmp/
 

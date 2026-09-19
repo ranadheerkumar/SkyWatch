@@ -241,33 +241,31 @@ export default function AutonomousAuditsStudio({
   };
 
   return (
-    <div className="autonomous-audits-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* Studio Header */}
-      <div className="panel run-history-toolbar">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+    <div className="autonomous-audits-container" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {/* Unified Studio Header & Tab Navigation */}
+      <div className="panel run-history-toolbar" style={{ padding: "10px 14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "8px" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>
+            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>
               🤖 Autonomous Orchestration &amp; Audits Studio
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--text-secondary)" }}>
-              Direct access to closed-loop autonomous campaigns, responsive visual regression audits, and automated API contract testing.
+            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)" }}>
+              Closed-loop autonomous campaigns, visual regression audits, and automated API contract testing.
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "8px" }}>
-            <span className="badge badge-secondary" style={{ padding: "6px 12px", fontSize: "12px" }}>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <span className="badge badge-secondary" style={{ padding: "3px 8px", fontSize: "11px" }}>
               App: <b>{application?.name || "Global Scope"}</b>
             </span>
-            <span className="badge badge-primary" style={{ padding: "6px 12px", fontSize: "12px" }}>
-              Engine: <b>Autonomous Orchestrator v2</b>
+            <span className="badge badge-primary" style={{ padding: "3px 8px", fontSize: "11px" }}>
+              Engine: <b>Orchestrator v2</b>
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Tabs Switcher */}
-      <div className="panel run-history-toolbar" style={{ padding: "8px 16px" }}>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+        {/* Tabs Switcher */}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", borderTop: "1px solid var(--border-light)", paddingTop: "8px" }}>
           <button
             type="button"
             className={`btn-sm ${activeTab === "visual" ? "primary" : "secondary"}`}

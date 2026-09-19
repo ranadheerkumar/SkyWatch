@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatDuration } from "../lib/formatDuration";
 import IntegrationConnectionsPanel, { type IntegrationConnectionsPanelProps } from "./IntegrationConnectionsPanel";
 import AuditLogViewer, { type AuditEntry } from "./AuditLogViewer";
+import SystemLogViewer from "./SystemLogViewer";
 
 export type AIConfigState = {
   provider: string;
@@ -24,7 +25,7 @@ export type ModelOption = {
   description?: string;
 };
 
-export type SettingsTab = "ai" | "integrations" | "execution" | "security" | "audit";
+export type SettingsTab = "ai" | "integrations" | "execution" | "security" | "audit" | "systemLogs";
 
 interface SettingsStudioProps {
   config: AIConfigState | null;
@@ -45,6 +46,8 @@ interface SettingsStudioProps {
   refreshingAuditLogs?: boolean;
   onRefreshAuditLogs?: () => Promise<void>;
   initialTab?: SettingsTab;
+  token?: string | null;
+  apiUrl?: string;
 }
 
 export default function SettingsStudio({
@@ -58,6 +61,8 @@ export default function SettingsStudio({
   refreshingAuditLogs,
   onRefreshAuditLogs,
   initialTab,
+  token,
+  apiUrl = "",
 }: SettingsStudioProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || "ai");
 
@@ -246,7 +251,55 @@ export default function SettingsStudio({
   const activeIntegrationCount = integrations?.connections?.filter((c) => c.status === "active").length ?? 0;
 
   return (
-    <div className="settings-studio-container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div className="settings-studio-container" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {/* Tab Navigation Toolbar */}
+      <div className="panel run-history-toolbar" style={{ padding: "6px 12px", marginBottom: 0 }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "ai" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("ai")}
+          >
+            🧠 AI Provider &amp; Model
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "integrations" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("integrations")}
+          >
+            🔌 Enterprise Integrations ({integrationCount})
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "execution" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("execution")}
+          >
+            ⚡ Execution Defaults
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "security" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("security")}
+          >
+            🛡️ Privacy &amp; Security
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "audit" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("audit")}
+          >
+            📜 Audit Logs {auditLogs?.length ? `(${auditLogs.length})` : ""}
+          </button>
+          <button
+            type="button"
+            className={`btn-sm ${activeTab === "systemLogs" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("systemLogs")}
+          >
+            🖥️ System Logs
+          </button>
+        </div>
+      </div>
+
       {/* KPI Overview Strip */}
       <div className="build-kpi-summary-cards">
         <div className="build-kpi-card">
@@ -295,47 +348,6 @@ export default function SettingsStudio({
           <span className="muted" style={{ fontSize: "var(--font-caption)" }}>
             Tamper-evident audit logs
           </span>
-        </div>
-      </div>
-
-      {/* Tab Navigation Toolbar */}
-      <div className="panel run-history-toolbar" style={{ padding: "8px 16px" }}>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            type="button"
-            className={`btn-sm ${activeTab === "ai" ? "primary" : "secondary"}`}
-            onClick={() => setActiveTab("ai")}
-          >
-            🧠 AI Provider &amp; Model
-          </button>
-          <button
-            type="button"
-            className={`btn-sm ${activeTab === "integrations" ? "primary" : "secondary"}`}
-            onClick={() => setActiveTab("integrations")}
-          >
-            🔌 Enterprise Integrations ({integrationCount})
-          </button>
-          <button
-            type="button"
-            className={`btn-sm ${activeTab === "execution" ? "primary" : "secondary"}`}
-            onClick={() => setActiveTab("execution")}
-          >
-            ⚡ Execution Defaults
-          </button>
-          <button
-            type="button"
-            className={`btn-sm ${activeTab === "security" ? "primary" : "secondary"}`}
-            onClick={() => setActiveTab("security")}
-          >
-            🛡️ Privacy &amp; Security
-          </button>
-          <button
-            type="button"
-            className={`btn-sm ${activeTab === "audit" ? "primary" : "secondary"}`}
-            onClick={() => setActiveTab("audit")}
-          >
-            📜 Audit Logs {auditLogs?.length ? `(${auditLogs.length})` : ""}
-          </button>
         </div>
       </div>
 
@@ -679,6 +691,13 @@ export default function SettingsStudio({
             onRefresh={onRefreshAuditLogs || (async () => {})}
             refreshing={Boolean(refreshingAuditLogs)}
           />
+        </div>
+      )}
+
+      {/* Tab 6: System & Runtime Logs */}
+      {activeTab === "systemLogs" && (
+        <div className="settings-studio-card">
+          <SystemLogViewer token={token} apiUrl={apiUrl} />
         </div>
       )}
     </div>

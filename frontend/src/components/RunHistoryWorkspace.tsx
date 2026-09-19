@@ -940,7 +940,7 @@ export default function RunHistoryWorkspace({
             </div>
 
             {showBuildFilters && (
-              <div className="run-history-filter-grid" style={{ marginTop: "12px" }}>
+              <div className="run-history-filter-grid" style={{ marginTop: "6px" }}>
                 <label className="capture-label">
                   Search builds
                   <input
@@ -1415,7 +1415,7 @@ export default function RunHistoryWorkspace({
             </div>
 
             {showCaseFilters && (
-              <div className="run-history-filter-grid" style={{ marginTop: "12px" }}>
+              <div className="run-history-filter-grid" style={{ marginTop: "6px" }}>
                 <label className="capture-label">
                   Search runs
                   <input

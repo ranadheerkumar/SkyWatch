@@ -191,30 +191,30 @@ export default function AgentRecommendationsBoard({
             </div>
             <h2 className="agent-hero-title">Autonomous QA Agents · {appName}</h2>
           </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
             <button
               type="button"
-              className={`btn ${activeTab === "recommendations" ? "btn-indigo" : "btn-secondary"}`}
+              className={`btn btn-sm ${activeTab === "recommendations" ? "btn-indigo" : "btn-secondary"}`}
               onClick={() => setActiveTab("recommendations")}
             >
-              Recommendations & Actions ({recommendations.length})
+              Recommendations ({recommendations.length})
             </button>
             <button
               type="button"
-              className={`btn ${activeTab === "registry" ? "btn-indigo" : "btn-secondary"}`}
+              className={`btn btn-sm ${activeTab === "registry" ? "btn-indigo" : "btn-secondary"}`}
               onClick={() => setActiveTab("registry")}
             >
-              Agent Registry & Capabilities (16)
+              Agent Registry (16)
             </button>
             {activeTab === "recommendations" ? (
               <button
                 type="button"
                 onClick={() => void onAnalyze()}
                 disabled={analyzing || !appId}
-                className="btn btn-emerald"
-                style={{ padding: "10px 20px", fontSize: "14px" }}
+                className="btn btn-emerald btn-sm"
+                style={{ padding: "4px 12px", fontSize: "12px" }}
               >
-                {analyzing ? "Analyzing Application..." : "Run Pre-Execution Analysis"}
+                {analyzing ? "Analyzing..." : "Run Pre-Execution Analysis"}
               </button>
             ) : null}
           </div>

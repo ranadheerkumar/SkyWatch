@@ -340,8 +340,18 @@ class LLMClient:
         )
 
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
-
-        return self._parse_response(response, duration_ms)
+        parsed = self._parse_response(response, duration_ms)
+        log_event(
+            logger,
+            "llm_request_completed",
+            provider=self.config.provider,
+            model=self.config.model,
+            duration_ms=duration_ms,
+            prompt_tokens=parsed.usage.prompt_tokens,
+            completion_tokens=parsed.usage.completion_tokens,
+            total_tokens=parsed.usage.total_tokens,
+        )
+        return parsed
 
     async def complete_json(
         self,

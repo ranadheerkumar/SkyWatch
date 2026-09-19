@@ -92,6 +92,8 @@ const QualityReportsWorkspace = dynamic(() => import("../components/QualityRepor
 const CompleteBuildReportPanel = dynamic(() => import("../components/CompleteBuildReportPanel"));
 const AutonomousAuditsStudio = dynamic(() => import("../components/AutonomousAuditsStudio"));
 const ObservabilityMetricsCard = dynamic(() => import("../components/ObservabilityMetricsCard"));
+const GenerationLogViewer = dynamic(() => import("../components/GenerationLogViewer"));
+import type { GenerationLogItem } from "../components/GenerationLogViewer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 const BRAND_TITLE = process.env.NEXT_PUBLIC_BRAND_TITLE ?? "SkyWatch";
@@ -524,6 +526,8 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   const [savingTestCase, setSavingTestCase] = useState(false);
 
   const [aiGenerationLogs, setAiGenerationLogs] = useState<ConsoleLogEntry[]>([]);
+  const [backendGenerationLogs, setBackendGenerationLogs] = useState<GenerationLogItem[]>([]);
+  const [activeGenJobId, setActiveGenJobId] = useState<string | null>(null);
   const [aiAgentStages, setAiAgentStages] = useState<AIAgentStage[]>(DEFAULT_AI_AGENT_STAGES);
   const [aiDocumentAnalysis, setAiDocumentAnalysis] = useState<AIDocumentAnalysis | null>(null);
   const [aiDocumentAnalysisError, setAiDocumentAnalysisError] = useState("");
@@ -541,6 +545,22 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     };
     setAiGenerationLogs((prev) => [...prev, entry]);
     console.log(`[AI-GENERATOR][${level.toUpperCase()}] ${message}`);
+  };
+
+  const fetchBackendGenerationLogs = async (jobId: string) => {
+    if (!token) return;
+    try {
+      const res = await apiFetch<{ logs: GenerationLogItem[] }>(
+        `/api/v1/ai-generation/jobs/${jobId}/logs`,
+        {},
+        token,
+      );
+      if (res?.logs) {
+        setBackendGenerationLogs(res.logs);
+      }
+    } catch (e) {
+      console.error("Failed to fetch backend generation logs:", e);
+    }
   };
 
   const analyzeAiDocuments = async (files: File[]) => {
@@ -4208,6 +4228,8 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
         appendAiLog("info", `🔗 Connected Jira requirement source: ${aiJiraIssue.key} - "${aiJiraIssue.summary}"`);
       }
       appendAiLog("success", `🧵 Durable generation job queued (${generationJob.id}).`);
+      setActiveGenJobId(generationJob.id);
+      setBackendGenerationLogs([]);
       let completedJob = generationJob;
       let lastJobPhase = "";
       let lastStageAnnouncement = "";
@@ -4238,11 +4260,31 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
         if (Date.now() - jobStartedAt > 900_000) {
           throw new Error("AI generation job timed out while waiting for the worker (exceeded 15 minutes).");
         }
+        try {
+          const logPayload = await apiFetch<{ logs: GenerationLogItem[] }>(
+            `/api/v1/ai-generation/jobs/${generationJob.id}/logs`,
+            {},
+            token,
+          );
+          if (logPayload?.logs?.length) {
+            setBackendGenerationLogs(logPayload.logs);
+          }
+        } catch {
+          if (completedJob.result?.logs) {
+            setBackendGenerationLogs(completedJob.result.logs as any);
+          }
+        }
         await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
         completedJob = await apiFetch<AIGenerationJob>(`/api/v1/ai-generation/jobs/${generationJob.id}`, {}, token);
       }
       if (completedJob.status === "failed") {
+        if (completedJob.result?.logs) {
+          setBackendGenerationLogs(completedJob.result.logs as any);
+        }
         throw new Error(completedJob.error || "AI generation job failed.");
+      }
+      if (completedJob.result?.logs) {
+        setBackendGenerationLogs(completedJob.result.logs as any);
       }
       if (completedJob.result?.agent_stages?.length) setAiAgentStages(completedJob.result.agent_stages);
       if (completedJob.result?.planner_used) {
@@ -5015,24 +5057,18 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     <>
       <section className="panel dashboard-hero dashboard-hero-modern">
         <div className="dashboard-hero-copy">
-          <div className="dashboard-hero-title-row">
-            <span className="eyebrow" style={{ color: "var(--brand-primary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "11px", marginBottom: "4px", display: "block" }}>Enterprise AI Quality Engineering</span>
-            <h2>{selectedProjectRow ? `${selectedProjectRow.name}` : app?.name ?? "Enterprise Quality Workspace"}</h2>
-            {selectedProjectRow?.description && (
-              <p style={{ margin: "2px 0 8px", fontSize: "13px", color: "var(--text-secondary)" }}>{selectedProjectRow.description}</p>
-            )}
-          </div>
-          <div className="dashboard-hero-meta">
-            <span className="dashboard-meta-chip">Project: {selectedProjectRow?.name ?? "Default"} ({selectedProjectRow ? formatProjectLifecycle(selectedProjectRow.lifecycle) : "Active"})</span>
-            <span className="dashboard-meta-chip">Environment: {selectedAppEnvironment}</span>
-            <span className="dashboard-meta-chip">Platform: {app ? formatPlatformLabel(app.platform) : "Multi-Platform"}</span>
+          <div className="dashboard-hero-title-row" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span className="eyebrow" style={{ color: "var(--brand-primary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "10px", display: "inline-block" }}>Enterprise AI QA</span>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>{selectedProjectRow ? `${selectedProjectRow.name}` : app?.name ?? "Enterprise Quality Workspace"}</h2>
             <span className={`dashboard-meta-chip ${selectedProjectRow ? `tone-${selectedProjectRow.healthBucket}` : dashboardHealthTone}`}>
               Health: {selectedProjectRow?.healthLabel ?? dashboardHealthLabel}
             </span>
+            <span className="dashboard-meta-chip">Env: {selectedAppEnvironment}</span>
+            <span className="dashboard-meta-chip">Platform: {app ? formatPlatformLabel(app.platform) : "Multi-Platform"}</span>
           </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-            <label className="dashboard-scope-control" htmlFor="dashboard-project-selector">
-              <span>Project scope</span>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginTop: "6px" }}>
+            <label className="dashboard-scope-control" htmlFor="dashboard-project-selector" title="Switch active project scope">
+              <span style={{ fontSize: "11px" }}>Project:</span>
               <select
                 id="dashboard-project-selector"
                 value={selectedProjectId}
@@ -5048,8 +5084,8 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
                 ))}
               </select>
             </label>
-            <label className="dashboard-scope-control" htmlFor="dashboard-scope-selector">
-              <span>Target scope</span>
+            <label className="dashboard-scope-control" htmlFor="dashboard-scope-selector" title="Switch active target application">
+              <span style={{ fontSize: "11px" }}>Target:</span>
               <select
                 id="dashboard-scope-selector"
                 value={app?.name ?? ""}
@@ -5062,22 +5098,22 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
           </div>
         </div>
         <div className="dashboard-hero-actions dashboard-action-row">
-          <button className="primary" onClick={() => navigateToSection("aiGenerator")} disabled={!app?.id}>
+          <button className="primary btn-sm" onClick={() => navigateToSection("aiGenerator")} disabled={!app?.id}>
             <AppIcon name="ai" />
             <span>AI Test Studio</span>
           </button>
-          <button className="primary" onClick={() => navigateToSection("systemMap")}>
+          <button className="primary btn-sm" onClick={() => navigateToSection("systemMap")}>
             <AppIcon name="map" />
             <span>Traceability Map</span>
           </button>
-          <button className="primary" onClick={() => navigateToSection("execution")} disabled={!app?.id}>
+          <button className="primary btn-sm" onClick={() => navigateToSection("execution")} disabled={!app?.id}>
             <AppIcon name="execution" />
             <span>Run tests</span>
           </button>
-          <button className="secondary" onClick={() => navigateToSection("projects")}>Projects ({projectCatalog.length})</button>
-          <button className="secondary" onClick={() => navigateToSection("applications")}>Applications ({apps.length})</button>
-          <button className="secondary" onClick={() => void loadDashboardData(token, app?.name)} disabled={refreshingData}>
-            {refreshingData ? "Refreshing..." : "Refresh data"}
+          <button className="secondary btn-sm" onClick={() => navigateToSection("projects")}>Projects ({projectCatalog.length})</button>
+          <button className="secondary btn-sm" onClick={() => navigateToSection("applications")}>Apps ({apps.length})</button>
+          <button className="secondary btn-sm" onClick={() => void loadDashboardData(token, app?.name)} disabled={refreshingData}>
+            {refreshingData ? "..." : "Refresh"}
           </button>
         </div>
       </section>
@@ -6659,31 +6695,43 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
 
   const testRepositoryWorkspace = (
     <>
-      <div className="panel execution-library-view-options" aria-label="Test case table view options">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
-          <div className="filter-presets-bar" style={{ margin: 0, padding: 0, border: "none" }}>
-            <span className="muted" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>Quick Presets:</span>
-            <button
-              type="button"
-              className={`filter-preset-chip ${executionLibraryStatusFilter === "all" ? "active" : ""}`}
-              onClick={() => setExecutionLibraryStatusFilter("all")}
-            >
-              All Cases ({totalCaseCount})
-            </button>
-            <button
-              type="button"
-              className={`filter-preset-chip ${executionLibraryStatusFilter === "ready" ? "active" : ""}`}
-              onClick={() => setExecutionLibraryStatusFilter("ready")}
-            >
-              Ready Only ({readyCaseCount})
-            </button>
-            <button
-              type="button"
-              className={`filter-preset-chip ${executionLibraryStatusFilter === "draft" ? "active" : ""}`}
-              onClick={() => setExecutionLibraryStatusFilter("draft")}
-            >
-              Draft Only ({draftCaseCount})
-            </button>
+      <div className="panel execution-library-view-options" aria-label="Test case table view options" style={{ padding: "8px 12px", marginBottom: "8px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <label className="capture-label flow-toggle" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={selectedCases.length > 0 && selectedCases.every((caseItem) => executionSelectedCaseIds.includes(caseItem.id))}
+                onChange={(event) => setExecutionSelectedCaseIds(event.target.checked ? selectedCases.map((caseItem) => caseItem.id) : [])}
+                disabled={!selectedCases.length || running || deletingTestCaseIds.length > 0}
+              />
+              Select all visible
+            </label>
+            <span className="muted" style={{ fontSize: "11px", fontWeight: 600 }}>({executionSelectedCaseIds.length} selected)</span>
+            <div className="filter-presets-bar" style={{ margin: 0, padding: 0, border: "none" }}>
+              <span className="muted" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>Presets:</span>
+              <button
+                type="button"
+                className={`filter-preset-chip ${executionLibraryStatusFilter === "all" ? "active" : ""}`}
+                onClick={() => setExecutionLibraryStatusFilter("all")}
+              >
+                All Cases ({totalCaseCount})
+              </button>
+              <button
+                type="button"
+                className={`filter-preset-chip ${executionLibraryStatusFilter === "ready" ? "active" : ""}`}
+                onClick={() => setExecutionLibraryStatusFilter("ready")}
+              >
+                Ready Only ({readyCaseCount})
+              </button>
+              <button
+                type="button"
+                className={`filter-preset-chip ${executionLibraryStatusFilter === "draft" ? "active" : ""}`}
+                onClick={() => setExecutionLibraryStatusFilter("draft")}
+              >
+                Draft Only ({draftCaseCount})
+              </button>
+            </div>
           </div>
 
           <button
@@ -7771,20 +7819,6 @@ Example (Markdown Table):
         </div>
       ) : null}
       <section className="execution-repository-workspace" aria-label="Test case repository">
-        <div className="execution-selection-controls">
-          <div className="execution-selection-summary">
-            <label className="capture-label flow-toggle">
-              <input
-                type="checkbox"
-                checked={selectedCases.length > 0 && selectedCases.every((caseItem) => executionSelectedCaseIds.includes(caseItem.id))}
-                onChange={(event) => setExecutionSelectedCaseIds(event.target.checked ? selectedCases.map((caseItem) => caseItem.id) : [])}
-                disabled={!selectedCases.length || running || deletingTestCaseIds.length > 0}
-              />
-              Select all visible
-            </label>
-            <span className="muted">{executionSelectedCaseIds.length} selected</span>
-          </div>
-        </div>
         {testRepositoryWorkspace}
       </section>
       {running && (
@@ -8359,49 +8393,49 @@ Example (Markdown Table):
           <button
             type="button"
             onClick={() => document.getElementById("ai-generation-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            className="btn btn-indigo"
-            style={{ padding: "10px 20px", fontSize: "14px" }}
+            className="btn btn-indigo btn-sm"
+            style={{ padding: "4px 12px", fontSize: "12px" }}
           >
-            Open generation workflow
+            ↓ Generation workflow
           </button>
         </div>
       </div>
 
-      <div className="panel" style={{ padding: "16px 20px", margin: "16px 0 20px" }}>
-        <div className="ai-simple-action-row">
-          <button className="primary" onClick={() => void generateAiCases()} disabled={!aiGenerationReady || aiGenerating}>
-            {aiGenerating || savingAiTarget ? "Generating..." : "Generate test cases"}
+      <div className="panel" style={{ padding: "8px 12px", margin: "0 0 10px" }}>
+        <div className="ai-simple-action-row" style={{ alignItems: "center" }}>
+          <button className="primary btn-sm" onClick={() => void generateAiCases()} disabled={!aiGenerationReady || aiGenerating}>
+            {aiGenerating || savingAiTarget ? "Generating..." : "⚡ Generate test cases"}
           </button>
-          <button className="secondary" onClick={() => void createStarterCases()} disabled={!app?.id || creatingStarterCases}>
+          <button
+            className="primary btn-sm"
+            onClick={() => { navigateToSection("execution"); void runApplicationCaseTests(aiReadyRunCaseIds); }}
+            disabled={!app?.id || running || aiReadyRunCaseIds.length === 0}
+          >
+            ▶ Run ready tests ({aiReadyRunCaseIds.length})
+          </button>
+          <button
+            className="secondary btn-sm"
+            onClick={() => { navigateToSection("execution"); void runApplicationCaseTests(latestGeneratedCaseIds); }}
+            disabled={!app?.id || running || latestGeneratedCases.length === 0}
+          >
+            Run latest ({latestGeneratedCases.length})
+          </button>
+          <button className="secondary btn-sm" onClick={() => void createStarterCases()} disabled={!app?.id || creatingStarterCases}>
             {creatingStarterCases ? "Creating..." : "Create starter cases"}
           </button>
           <button
-            className="secondary btn-danger"
+            className="secondary btn-sm btn-danger"
             onClick={() => void clearDraftCases()}
             disabled={!app?.id || selectedCases.length === 0 || clearingDrafts}
           >
             {clearingDrafts ? "Clearing..." : selectedDraftCount > 0 ? `Clear drafts (${selectedDraftCount})` : "Clear drafts"}
           </button>
-          <button className="secondary" onClick={() => navigateToSection("cases")}>Open Test Cases</button>
-          <button
-            className="primary"
-            onClick={() => { navigateToSection("execution"); void runApplicationCaseTests(aiReadyRunCaseIds); }}
-            disabled={!app?.id || running || aiReadyRunCaseIds.length === 0}
-          >
-            Run ready tests ({aiReadyRunCaseIds.length})
-          </button>
-          <button
-            className="secondary"
-            onClick={() => { navigateToSection("execution"); void runApplicationCaseTests(latestGeneratedCaseIds); }}
-            disabled={!app?.id || running || latestGeneratedCases.length === 0}
-          >
-            Run latest generated ({latestGeneratedCases.length})
-          </button>
-          <button className="secondary" onClick={downloadGeneratedPreviewTemplate} disabled={!app?.id || !previewCaseRows.length || downloadingAiPreview}>
+          <button className="secondary btn-sm" onClick={() => navigateToSection("cases")}>Open Test Cases</button>
+          <button className="secondary btn-sm" onClick={downloadGeneratedPreviewTemplate} disabled={!app?.id || !previewCaseRows.length || downloadingAiPreview}>
             {downloadingAiPreview ? "Downloading..." : "Download template"}
           </button>
         </div>
-        {!aiGenerationReady ? <p className="muted" style={{ margin: "8px 0 0" }}>{aiGenerationBlocker}</p> : null}
+        {!aiGenerationReady ? <p className="muted" style={{ margin: "4px 0 0", fontSize: "11px" }}>{aiGenerationBlocker}</p> : null}
       </div>
 
       <div className="ai-simple-grid" id="ai-generation-workflow">
@@ -8752,6 +8786,17 @@ Example (Markdown Table):
           agentStages={aiAgentStages}
           onClear={() => setAiGenerationLogs([])}
         />
+
+        {/* Backend Generation Logs & Execution Trace */}
+        <div style={{ marginTop: "16px" }}>
+          <GenerationLogViewer
+            jobId={activeGenJobId}
+            logs={backendGenerationLogs}
+            status={aiGenerating ? "running" : backendGenerationLogs.length > 0 ? "completed" : "idle"}
+            phase={aiGenerationPhase}
+            onRefresh={activeGenJobId ? () => void fetchBackendGenerationLogs(activeGenJobId) : undefined}
+          />
+        </div>
 
         <p className="muted" style={{ marginTop: "10px" }}>Generated draft rows appear in Test Cases. Ready cases can be executed from the Execution page.</p>
       </AppCard>
@@ -9107,10 +9152,12 @@ Example (Markdown Table):
       <ObservabilityMetricsCard token={token} appId={app?.id} appName={app?.name} />
       <SettingsStudio
         config={aiConfigState}
-      onRefresh={() => loadAiConfiguration(token)}
-      onTest={handleTestAiConfig}
-      onSave={handleSaveAiConfig}
-      onDiscoverModels={handleDiscoverAiModels}
+        token={token}
+        apiUrl={API_BASE_URL}
+        onRefresh={() => loadAiConfiguration(token)}
+        onTest={handleTestAiConfig}
+        onSave={handleSaveAiConfig}
+        onDiscoverModels={handleDiscoverAiModels}
       auditLogs={auditLogList}
       refreshingAuditLogs={refreshingAuditLogs}
       onRefreshAuditLogs={() => loadAuditLogs(token)}

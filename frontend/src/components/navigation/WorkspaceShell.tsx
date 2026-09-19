@@ -174,7 +174,7 @@ export default function WorkspaceShell({
           </div>
 
           <span className="header-app-version" aria-label={`Application version ${APP_VERSION}`}>
-            Version {APP_VERSION}
+            v{APP_VERSION}
           </span>
         </div>
 

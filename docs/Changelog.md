@@ -1,6 +1,39 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.1.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.3.0`.
+
+## [2.3.0] - 2026-09-19
+
+### Changed
+- **Enterprise-Grade Layout, Header & Filter Density Architecture**:
+  - Streamlined `.app-header` from 60px down to a crisp, high-density 48px height with strict `flex-wrap: nowrap`, eliminating header ballooning and vertical jitter on laptops and zoomed displays.
+  - Compact header hierarchy bar: streamlined project and application selectors to 28px height with clean, aligned metadata, while keeping `TractorSupplyLogo` strictly unchanged and all select functionality 100% operational.
+  - Replaced multi-row, 180px+ vertically stacked filter grids with modern, high-density single-row filter toolbars across **Run History**, **Defect Management**, **Quality Reports**, and **Test Execution**.
+  - Replaced bulky 200px+ hero banners on **Dashboard**, **AI Test Studio**, and **System Architecture Map** with sleek 48px executive titlebars, reclaiming over 300px of vertical real estate so test cases, prompts, and charts appear immediately above the fold.
+  - Reordered visual hierarchy in **Settings** and **Autonomous Audits Studio**: tab navigation is positioned directly at the top of the workspace with compact metric strips below.
+  - Reduced page wrapper top padding and card margins for maximum above-the-fold information density.
+
+## [2.2.0] - 2026-09-19
+
+### Added
+- **AI Generation Lifecycle Logging & Audit Persistence (`app/services/generation_logger.py`)**:
+  - Implemented `GenerationLogger` capturing granular events across the entire test design lifecycle (document intake, target DOM exploration, planner blueprints, LLM prompts/completions, tokens, latency, progressive backoff retries, and schema validation).
+  - Automatically persists complete execution logs in `AIGenerationJob.result["logs"]` and streams to `backend/logs/ai_generation.log`.
+  - Added dedicated endpoint `GET /api/v1/ai-generation/jobs/{job_id}/logs` supporting both structured JSON and plain-text terminal output with level filtering (`INFO`, `STEP`, `LLM`, `WARN`, `ERROR`).
+- **Rotating File Handlers & Secret Redaction (`app/core/logging.py`)**:
+  - Automated log directory initialization (`backend/logs/`) with size-limited rotating file logging:
+    - `skywatch.log`: General application operations (5MB, 5 backups).
+    - `ai_generation.log`: Dedicated AI and LLM generation stream (10MB, 5 backups).
+    - `errors.log`: Filtered error and critical log records (5MB, 5 backups).
+  - Implemented `SecretMaskingFilter` with automatic regex redaction of Google Gemini keys (`AIza...`, `AQ....`), OpenAI/Anthropic keys (`sk-...`), GitHub tokens (`ghp_...`), Bearer tokens, and passwords.
+- **In-Memory Ring Buffer & Observability Log API (`app/core/logging.py`, `app/api/v1/observability.py`)**:
+  - Implemented thread-safe `RingBufferLogHandler` holding the latest 1,000 application log records in memory.
+  - Added endpoint `GET /api/v1/observability/logs` enabling search, level filtering, and real-time log querying.
+- **Frontend Real-Time Log Viewers**:
+  - **`GenerationLogViewer` (`frontend/src/components/GenerationLogViewer.tsx`)**: Embedded in AI Scenario Studio with real-time auto-scrolling, level filtering, search bar, clipboard copy, and `.log` file download.
+  - **`SystemLogViewer` (`frontend/src/components/SystemLogViewer.tsx`)**: Integrated into `SettingsStudio` under the "🖥️ System Logs" tab with live-polling, pause/resume, limit selection, and export.
+- **Complete Subsystem Documentation (`docs/LOGGING_AND_OBSERVABILITY.md`)**:
+  - Comprehensive guide covering file logging, security redaction, generation log lifecycle, API contracts, and best practices.
 
 ## [2.1.0] - 2026-09-19
 

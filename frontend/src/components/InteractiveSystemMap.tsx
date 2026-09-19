@@ -800,9 +800,9 @@ export default function InteractiveSystemMap({
   }, [selectedNode, testCases]);
 
   return (
-    <div className="interactive-system-map-workspace" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="interactive-system-map-workspace" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       {/* ─── HERO HEADER BANNER ─── */}
-      <div className="agent-hero-banner" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #172554 100%)" }}>
+      <div className="agent-hero-banner" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #172554 100%)", padding: "8px 14px", marginBottom: "4px" }}>
         <div className="agent-hero-head">
           <div>
             <div className="agent-hero-badge" style={{ background: "rgba(59, 130, 246, 0.2)", borderColor: "rgba(96, 165, 250, 0.4)", color: "#93c5fd" }}>
@@ -810,18 +810,15 @@ export default function InteractiveSystemMap({
               Architecture &amp; Test Flow Diagram
             </div>
             <h2 className="agent-hero-title">System Architecture &amp; Test Flow Engine</h2>
-            <p className="muted" style={{ color: "#cbd5e1", margin: "6px 0 0", fontSize: "14px" }}>
-              Visual diagram connecting Applications, BFF/API Services, Data Stores, and Test Scenarios based on workspace test cases.
-            </p>
           </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-            <button type="button" className="btn btn-secondary" onClick={handleDownloadJson} title="Export architecture flow graph as JSON">
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownloadJson} title="Export architecture flow graph as JSON">
               Export Flow JSON
             </button>
             {onGenerateForApp ? (
               <button
                 type="button"
-                className="btn btn-emerald"
+                className="btn btn-emerald btn-sm"
                 onClick={() => onGenerateForApp(filterScope === "ALL" ? (applications[0]?.name ?? "") : filterScope)}
               >
                 + Generate Test Scenarios

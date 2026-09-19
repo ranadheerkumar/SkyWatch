@@ -32,6 +32,7 @@ from app.services.ai_generation_pipeline import (
     update_agent_stages,
 )
 from app.services.guardrails import GuardrailViolationError, sanitize_and_validate_prompt, validate_target_url
+from app.services.generation_logger import GenerationLogger, get_active_generation_logger
 from app.services.self_learning import SelfLearningEngine
 from app.services.test_data_generator import TestDataGeneratorService
 
@@ -71,7 +72,11 @@ def _set_job_stage(
         metrics=metrics,
     )
     job.phase = stage_key
-    job.result = {**(job.result or {}), "agent_stages": next_stages}
+    active_logger = get_active_generation_logger(job.id)
+    current_logs = (job.result or {}).get("logs", [])
+    if active_logger:
+        current_logs = active_logger.get_entries()
+    job.result = {**(job.result or {}), "agent_stages": next_stages, "logs": current_logs}
     db.commit()
     return next_stages
 
@@ -79,22 +84,29 @@ def _set_job_stage(
 def _run_job(job_id: str) -> None:
     db = SessionLocal()
     job: AIGenerationJob | None = None
+    gen_logger: GenerationLogger | None = None
     agent_stages = initial_agent_stages()
     current_stage_key = "document_analysis"
     try:
         job = db.get(AIGenerationJob, job_id)
         if not job:
             return
+        gen_logger = GenerationLogger(job_id=job.id, db=db, correlation_id=job.correlation_id or "")
         job.status = "running"
         job.phase = current_stage_key
         job.started_at = datetime.now(timezone.utc)
-        job.result = initial_workflow_result()
+        job.result = {**initial_workflow_result(), "logs": gen_logger.get_entries()}
         agent_stages = job.result["agent_stages"]
         db.commit()
 
         application = db.get(Application, job.application_id)
         if not application:
             raise ValueError("Application not found")
+        gen_logger.info(
+            f"AI Generation job started for application '{application.name}' (target: {application.target or 'N/A'})",
+            provider=job.provider or "auto",
+            model=job.model or "auto",
+        )
         payload = job.request_payload
         raw_document_context = (payload.get("document_context") or "").strip()[:60_000]
         raw_jira_context = (payload.get("jira_context") or "").strip()[:60_000]
@@ -248,6 +260,12 @@ def _run_job(job_id: str) -> None:
             "intake_signals": intake_signals,
             "vector_chunks_indexed": vector_chunks_indexed,
         }
+        if gen_logger:
+            gen_logger.step(
+                f"Document analysis completed: extracted {context_snapshot['requirements_found']} requirement(s), {len(context_snapshot['modules'])} module(s), indexed {vector_chunks_indexed} vector chunk(s)",
+                requirements_count=context_snapshot["requirements_found"],
+                modules_count=len(context_snapshot["modules"]),
+            )
         agent_stages = _set_job_stage(
             db,
             job,
@@ -314,6 +332,13 @@ def _run_job(job_id: str) -> None:
             "discovery": discovery_snapshot,
             "application_context": context_snapshot,
         }
+        if gen_logger:
+            gen_logger.step(
+                f"Target discovery completed: found {len(discovery_context.headings)} headings, {len(discovery_context.buttons) + len(discovery_context.links)} controls on {effective_target}",
+                target_url=effective_target,
+                headings_count=len(discovery_context.headings),
+                controls_count=len(discovery_context.buttons) + len(discovery_context.links),
+            )
         agent_stages = _set_job_stage(
             db,
             job,
@@ -423,6 +448,13 @@ def _run_job(job_id: str) -> None:
             "planner_used": True,
         }
         job.result = {**(job.result or {}), "planner": planner_snapshot}
+        if gen_logger:
+            gen_logger.llm(
+                f"AI Planner completed: synthesized {ai_planner_plan['recommended_case_count']} scenario blueprint(s) across {len(ai_planner_plan['coverage_matrix'])} coverage area(s)",
+                provider=planner_result.get("provider"),
+                model=planner_result.get("model"),
+                case_target=ai_planner_plan["recommended_case_count"],
+            )
         agent_stages = _set_job_stage(
             db,
             job,
@@ -512,6 +544,13 @@ def _run_job(job_id: str) -> None:
                 observed_target_context=discovery_context,
             )
         )
+        if gen_logger:
+            gen_logger.llm(
+                f"AI Generator produced {len(generated.test_cases)} structured test cases across {generated.generator_call_count} provider call(s)",
+                provider=generated.generation_provider or job.provider,
+                candidate_count=len(generated.test_cases),
+                call_count=generated.generator_call_count,
+            )
         agent_stages = _set_job_stage(
             db,
             job,
@@ -785,12 +824,24 @@ def _run_job(job_id: str) -> None:
             progress=100,
             metrics={"persisted_case_count": len(created), "review_count": job.review_count},
         )
+        if gen_logger:
+            gen_logger.info(
+                f"AI Generation job completed successfully: {len(created)} test cases created (IDs: {[c.id for c in created]})",
+                persisted_count=len(created),
+                review_count=job.review_count,
+            )
         job.status = "completed"
         job.phase = "completed"
         job.finished_at = datetime.now(timezone.utc)
         db.commit()
     except Exception as error:
         db.rollback()
+        if gen_logger:
+            gen_logger.error(
+                f"AI Generation failed at stage '{current_stage_key}': {type(error).__name__}: {error}",
+                stage=current_stage_key,
+                error_type=type(error).__name__,
+            )
         failed_job = db.get(AIGenerationJob, job_id)
         if failed_job:
             failed_job.status = "failed"
@@ -804,10 +855,14 @@ def _run_job(job_id: str) -> None:
                 detail=f"Stage failed: {type(error).__name__}.",
                 progress=0,
             )
+            if gen_logger:
+                result["logs"] = gen_logger.get_entries()
             failed_job.result = result
             failed_job.finished_at = datetime.now(timezone.utc)
             db.commit()
     finally:
+        if gen_logger:
+            gen_logger.close(job=job)
         db.close()
 
 

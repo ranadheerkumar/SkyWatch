@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 
 from app.api.dependencies import DbSession, require_roles
 from app.models.ai_generation_job import AIGenerationJob
@@ -152,6 +152,50 @@ def get_generation_job(
     if not job:
         raise HTTPException(status_code=404, detail="Generation job not found")
     return job
+
+
+@router.get("/jobs/{job_id}/logs")
+def get_generation_job_logs(
+    job_id: str,
+    db: DbSession,
+    format: str = Query("json", description="Output format: 'json' or 'text'"),
+    level: str = Query("all", description="Filter by log level: 'all', 'info', 'warn', 'error', 'step', 'llm'"),
+    user: User = Depends(require_roles("tester", "qa_lead", "admin")),
+):
+    """Retrieve structured or plain-text execution logs for an AI scenario generation job."""
+    from app.services.generation_logger import get_active_generation_logger
+
+    job = db.query(AIGenerationJob).filter(AIGenerationJob.id == job_id, AIGenerationJob.created_by == user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Generation job not found")
+
+    active_logger = get_active_generation_logger(job_id)
+    if active_logger:
+        entries = active_logger.get_entries(level=None if level == "all" else level)
+        text_content = active_logger.to_text(level=None if level == "all" else level)
+    else:
+        stored_entries = (job.result or {}).get("logs", [])
+        if level != "all":
+            entries = [e for e in stored_entries if e.get("level", "").upper() == level.upper()]
+        else:
+            entries = stored_entries
+        lines = []
+        for e in entries:
+            time_str = e.get("iso_time", "")
+            meta = f" | {e.get('metadata')}" if e.get("metadata") else ""
+            lines.append(f"[{time_str}] [{e.get('level', 'INFO')}] [{e.get('stage', 'general')}] {e.get('message', '')}{meta}")
+        text_content = "\n".join(lines)
+
+    if format.lower() == "text":
+        return Response(content=text_content, media_type="text/plain; charset=utf-8")
+
+    return {
+        "job_id": job_id,
+        "status": job.status,
+        "phase": job.phase,
+        "total_entries": len(entries),
+        "logs": entries,
+    }
 
 
 @router.get("/self-learning/{application_id}")

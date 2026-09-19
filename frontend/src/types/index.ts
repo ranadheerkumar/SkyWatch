@@ -387,6 +387,15 @@ export type AIGenerationJob = {
 		generator_call_count?: number;
 		agent_stages?: AIAgentStage[];
 		case_ids?: number[];
+		logs?: Array<{
+			job_id?: string;
+			stage?: string;
+			level?: string;
+			message: string;
+			metadata?: Record<string, any>;
+			timestamp?: number;
+			iso_time?: string;
+		}>;
 	} | null;
 	error?: string | null;
 	created_at?: string | null;
