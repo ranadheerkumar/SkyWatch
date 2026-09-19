@@ -258,3 +258,49 @@ class IntegrationActionError(BaseModel):
     message: str
     status_code: int | None = None
     read_only: bool = True
+
+
+class JiraLinkRequest(BaseModel):
+    outward_key: str = Field(min_length=1, max_length=120)
+    link_type: str = Field(default="Relates", max_length=120)
+    comment: str | None = Field(default=None, max_length=5000)
+
+
+class JiraTransitionRequest(BaseModel):
+    transition_id: str = Field(min_length=1, max_length=120)
+    comment: str | None = Field(default=None, max_length=5000)
+
+
+class JiraCommentRequest(BaseModel):
+    comment: str = Field(min_length=1, max_length=30000)
+
+
+class QTestBuildCreateRequest(BaseModel):
+    release_id: int | str
+    build_name: str = Field(min_length=1, max_length=250)
+    build_note: str = Field(default="", max_length=5000)
+
+
+class QTestSubmitTestLogRequest(BaseModel):
+    status: Literal["PASSED", "FAILED", "BLOCKED", "INCOMPLETE"] = "PASSED"
+    start_time: str | None = None
+    end_time: str | None = None
+    name: str = Field(default="SkyWatch Test Run", max_length=250)
+    note: str = Field(default="", max_length=5000)
+    steps: list[dict[str, Any]] | None = None
+    defect_ids: list[str | int] | None = None
+
+
+class QTestExportTestCaseRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=250)
+    description: str = Field(default="", max_length=10000)
+    steps: list[dict[str, str]] | None = None
+    parent_id: int | str | None = None
+
+
+class IntegrationWebhookPayload(BaseModel):
+    event: str
+    timestamp: str | None = None
+    issue_key: str | None = None
+    project_key: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)

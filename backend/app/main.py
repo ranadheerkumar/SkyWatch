@@ -12,6 +12,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import configure_logging, correlation_id_context, set_correlation_id
+from app.core.rate_limiter import RateLimiterEngine, RateLimitMiddleware
 from app.core.security import hash_password
 from app.models import User
 
@@ -74,6 +75,15 @@ app.add_middleware(
 	],
 )
 app.include_router(api_router)
+
+# Rate Limiting Middleware
+_rate_limiter = RateLimiterEngine(enabled=settings.RATE_LIMIT_ENABLED)
+app.add_middleware(RateLimitMiddleware, rate_limiter=_rate_limiter)
+
+# Wire rate limiter to observability endpoint
+from app.api.v1.observability import set_rate_limiter_engine
+set_rate_limiter_engine(_rate_limiter)
+
 ensure_initial_admin()
 
 

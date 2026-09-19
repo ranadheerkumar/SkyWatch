@@ -464,3 +464,248 @@ async def export_defect_to_qtest(
         "external_key": created["key"],
         "external_url": created["url"],
     }
+
+
+async def attach_artifact_to_jira_defect(
+    db: Session,
+    defect_id: int,
+    user_id: int,
+    *,
+    filename: str,
+    content: bytes,
+    mime_type: str = "application/octet-stream",
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    from app.models.defect import Defect
+    from app.models.external_issue_link import ExternalIssueLink
+
+    defect = db.query(Defect).filter(Defect.id == defect_id).first()
+    if not defect:
+        raise IntegrationServiceError(f"Defect #{defect_id} was not found")
+
+    link = db.query(ExternalIssueLink).filter(
+        ExternalIssueLink.defect_id == defect_id,
+        ExternalIssueLink.system == "jira",
+    ).first()
+    if not link or not link.external_key:
+        raise IntegrationServiceError(f"No Jira issue is linked to Defect #{defect_id}")
+
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("jira")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active Jira connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, JiraClient):
+        raise IntegrationServiceError("Configured connection is not a Jira profile")
+
+    return await client.upload_attachment(
+        issue_key=link.external_key,
+        filename=filename,
+        content=content,
+        content_type=mime_type,
+    )
+
+
+async def link_jira_defect_to_requirement(
+    db: Session,
+    defect_id: int,
+    requirement_key: str,
+    *,
+    link_type: str = "Relates",
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    from app.models.external_issue_link import ExternalIssueLink
+
+    link = db.query(ExternalIssueLink).filter(
+        ExternalIssueLink.defect_id == defect_id,
+        ExternalIssueLink.system == "jira",
+    ).first()
+    if not link or not link.external_key:
+        raise IntegrationServiceError(f"No Jira issue is linked to Defect #{defect_id}")
+
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("jira")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active Jira connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, JiraClient):
+        raise IntegrationServiceError("Configured connection is not a Jira profile")
+
+    return await client.link_issues(
+        inward_key=link.external_key,
+        outward_key=requirement_key,
+        link_type=link_type,
+    )
+
+
+async def get_jira_issue_transitions(
+    db: Session,
+    issue_key: str,
+    *,
+    connection_id: int | None = None,
+) -> list[dict[str, Any]]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("jira")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active Jira connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, JiraClient):
+        raise IntegrationServiceError("Configured connection is not a Jira profile")
+
+    return await client.get_transitions(issue_key)
+
+
+async def transition_jira_issue(
+    db: Session,
+    issue_key: str,
+    transition_id: str,
+    *,
+    comment: str | None = None,
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("jira")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active Jira connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, JiraClient):
+        raise IntegrationServiceError("Configured connection is not a Jira profile")
+
+    return await client.transition_issue(issue_key, transition_id, comment=comment)
+
+
+async def register_qtest_build(
+    db: Session,
+    *,
+    release_id: int | str,
+    build_name: str,
+    build_note: str = "",
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("qtest")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "qtest", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active qTest connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, QTestClient):
+        raise IntegrationServiceError("Configured connection is not a qTest profile")
+
+    return await client.create_build(release_id=release_id, build_name=build_name, build_note=build_note)
+
+
+async def get_qtest_builds(
+    db: Session,
+    release_id: int | str,
+    *,
+    connection_id: int | None = None,
+) -> list[dict[str, Any]]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("qtest")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "qtest", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active qTest connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, QTestClient):
+        raise IntegrationServiceError("Configured connection is not a qTest profile")
+
+    return await client.get_builds(release_id=release_id)
+
+
+async def submit_qtest_test_run_log(
+    db: Session,
+    test_run_id: int | str,
+    *,
+    status: str = "PASSED",
+    start_time: str | None = None,
+    end_time: str | None = None,
+    name: str = "SkyWatch Test Run",
+    note: str = "",
+    steps: list[dict[str, Any]] | None = None,
+    defect_ids: list[str | int] | None = None,
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("qtest")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "qtest", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active qTest connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, QTestClient):
+        raise IntegrationServiceError("Configured connection is not a qTest profile")
+
+    return await client.submit_auto_test_log(
+        test_run_id=test_run_id,
+        status=status,
+        start_time=start_time,
+        end_time=end_time,
+        name=name,
+        note=note,
+        steps=steps,
+        defect_ids=defect_ids,
+    )
+
+
+async def export_test_case_to_qtest(
+    db: Session,
+    *,
+    name: str,
+    description: str = "",
+    steps: list[dict[str, str]] | None = None,
+    parent_id: int | str | None = None,
+    connection_id: int | None = None,
+) -> dict[str, Any]:
+    target_connection = None
+    if connection_id is not None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_connection is None:
+        target_connection = environment_connection("qtest")
+    if target_connection is None:
+        target_connection = db.query(IntegrationConnection).filter(IntegrationConnection.system == "qtest", IntegrationConnection.status == "active").first()
+    if target_connection is None:
+        raise IntegrationServiceError("No active qTest connection configured")
+
+    client = _client_for(target_connection)
+    if not isinstance(client, QTestClient):
+        raise IntegrationServiceError("Configured connection is not a qTest profile")
+
+    return await client.export_test_case(name=name, description=description, steps=steps, parent_id=parent_id)

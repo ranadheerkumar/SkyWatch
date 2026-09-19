@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import DbSession, current_user, require_roles
@@ -22,26 +22,42 @@ from app.schemas.integration import (
     IntegrationEnvironmentResponse,
     IntegrationEnvironmentUpdate,
     IntegrationSystem,
+    JiraCommentRequest,
     JiraFetchIssueRequest,
     JiraIssueResponse,
+    JiraLinkRequest,
+    JiraTransitionRequest,
+    QTestBuildCreateRequest,
+    QTestExportTestCaseRequest,
+    QTestSubmitTestLogRequest,
 )
 from app.services.audit import log_audit_event
 from app.services.integration_service import (
     IntegrationServiceError,
+    _client_for,
+    attach_artifact_to_jira_defect,
     connection_response,
     create_connection,
     environment_credential,
     environment_connection,
+    export_test_case_to_qtest,
     fetch_jira_issue,
+    get_jira_issue_transitions,
+    get_qtest_builds,
     integration_environment_value,
     is_environment_connection,
+    link_jira_defect_to_requirement,
     list_jira_requirements,
     list_qtest_assets,
+    register_qtest_build,
+    submit_qtest_test_run_log,
     test_connection,
+    transition_jira_issue,
     update_environment_configuration,
     update_connection,
 )
-from app.services.integrations import IntegrationClientError
+from app.services.integrations import IntegrationClientError, JiraClient, QTestClient
+
 
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
@@ -477,3 +493,307 @@ def block_jira_mutations(connection_id: int) -> None:
         detail="Jira write operations are disabled. This integration is read-only.",
         headers={"Allow": "GET"},
     )
+
+
+@router.post("/jira/issues/{issue_key}/attachments")
+async def upload_jira_attachment_endpoint(
+    issue_key: str,
+    db: DbSession,
+    file: UploadFile = File(...),
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    target_conn = None
+    if connection_id is not None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_conn is None:
+        target_conn = environment_connection("jira")
+    if target_conn is None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_conn is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active Jira connection configured")
+
+    client = _client_for(target_conn)
+    if not isinstance(client, JiraClient):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Jira profile")
+
+    file_bytes = await file.read()
+    try:
+        result = await client.upload_attachment(
+            issue_key=issue_key,
+            filename=file.filename or "attachment.png",
+            content=file_bytes,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.jira.attachment.upload",
+        resource_type="jira_issue",
+        resource_id=issue_key,
+        metadata={"filename": file.filename},
+    )
+    db.commit()
+    return result
+
+
+@router.post("/jira/issues/{issue_key}/links")
+async def create_jira_issue_link_endpoint(
+    issue_key: str,
+    request: JiraLinkRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    target_conn = None
+    if connection_id is not None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_conn is None:
+        target_conn = environment_connection("jira")
+    if target_conn is None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_conn is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active Jira connection configured")
+
+    client = _client_for(target_conn)
+    if not isinstance(client, JiraClient):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Jira profile")
+
+    try:
+        result = await client.link_issues(
+            inward_key=issue_key,
+            outward_key=request.outward_key,
+            link_type=request.link_type,
+            comment=request.comment,
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.jira.issue.link",
+        resource_type="jira_issue",
+        resource_id=issue_key,
+        metadata={"outward": request.outward_key, "type": request.link_type},
+    )
+    db.commit()
+    return result
+
+
+@router.get("/jira/issues/{issue_key}/transitions")
+async def get_jira_transitions_endpoint(
+    issue_key: str,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> list[dict[str, Any]]:
+    try:
+        return await get_jira_issue_transitions(db, issue_key, connection_id=connection_id)
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@router.post("/jira/issues/{issue_key}/transitions")
+async def apply_jira_transition_endpoint(
+    issue_key: str,
+    request: JiraTransitionRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    try:
+        result = await transition_jira_issue(
+            db,
+            issue_key=issue_key,
+            transition_id=request.transition_id,
+            comment=request.comment,
+            connection_id=connection_id,
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.jira.issue.transition",
+        resource_type="jira_issue",
+        resource_id=issue_key,
+        metadata={"transition_id": request.transition_id},
+    )
+    db.commit()
+    return result
+
+
+@router.post("/jira/issues/{issue_key}/comments")
+async def post_jira_comment_endpoint(
+    issue_key: str,
+    request: JiraCommentRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    target_conn = None
+    if connection_id is not None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.id == connection_id).first()
+    if target_conn is None:
+        target_conn = environment_connection("jira")
+    if target_conn is None:
+        target_conn = db.query(IntegrationConnection).filter(IntegrationConnection.system == "jira", IntegrationConnection.status == "active").first()
+    if target_conn is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active Jira connection configured")
+
+    client = _client_for(target_conn)
+    if not isinstance(client, JiraClient):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Jira profile")
+
+    try:
+        result = await client.add_comment(issue_key, request.comment)
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(db, user_id=user.id, action="integration.jira.issue.comment", resource_type="jira_issue", resource_id=issue_key)
+    db.commit()
+    return result
+
+
+@router.get("/qtest/builds")
+async def list_qtest_builds_endpoint(
+    release_id: str = Query(...),
+    db: DbSession = None,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> list[dict[str, Any]]:
+    try:
+        return await get_qtest_builds(db, release_id=release_id, connection_id=connection_id)
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@router.post("/qtest/builds")
+async def create_qtest_build_endpoint(
+    request: QTestBuildCreateRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    try:
+        result = await register_qtest_build(
+            db,
+            release_id=request.release_id,
+            build_name=request.build_name,
+            build_note=request.build_note,
+            connection_id=connection_id,
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.qtest.build.create",
+        resource_type="qtest_build",
+        resource_id=str(result.get("id")),
+        metadata={"release_id": str(request.release_id), "name": request.build_name},
+    )
+    db.commit()
+    return result
+
+
+@router.post("/qtest/test-runs/{test_run_id}/logs")
+async def submit_qtest_log_endpoint(
+    test_run_id: str,
+    request: QTestSubmitTestLogRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    try:
+        result = await submit_qtest_test_run_log(
+            db,
+            test_run_id=test_run_id,
+            status=request.status,
+            start_time=request.start_time,
+            end_time=request.end_time,
+            name=request.name,
+            note=request.note,
+            steps=request.steps,
+            defect_ids=request.defect_ids,
+            connection_id=connection_id,
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.qtest.test_log.submit",
+        resource_type="qtest_test_run",
+        resource_id=test_run_id,
+        metadata={"status": request.status},
+    )
+    db.commit()
+    return result
+
+
+@router.post("/qtest/test-cases/export")
+async def export_qtest_test_case_endpoint(
+    request: QTestExportTestCaseRequest,
+    db: DbSession,
+    connection_id: int | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    try:
+        result = await export_test_case_to_qtest(
+            db,
+            name=request.name,
+            description=request.description,
+            steps=request.steps,
+            parent_id=request.parent_id,
+            connection_id=connection_id,
+        )
+    except (IntegrationClientError, IntegrationServiceError) as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="integration.qtest.test_case.export",
+        resource_type="qtest_test_case",
+        resource_id=str(result.get("id")),
+        metadata={"name": request.name},
+    )
+    db.commit()
+    return result
+
+
+@router.post("/webhooks/jira")
+async def receive_jira_webhook(
+    payload: dict[str, Any],
+    db: DbSession,
+) -> dict[str, Any]:
+    webhook_event = payload.get("webhookEvent") or payload.get("event") or "unknown"
+    issue = payload.get("issue") or {}
+    issue_key = issue.get("key")
+    return {
+        "status": "received",
+        "system": "jira",
+        "webhook_event": webhook_event,
+        "issue_key": issue_key,
+    }
+
+
+@router.post("/webhooks/qtest")
+async def receive_qtest_webhook(
+    payload: dict[str, Any],
+    db: DbSession,
+) -> dict[str, Any]:
+    event_type = payload.get("event") or payload.get("action") or "unknown"
+    return {
+        "status": "received",
+        "system": "qtest",
+        "event_type": event_type,
+    }

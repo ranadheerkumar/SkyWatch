@@ -23,10 +23,12 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from app.agent.analysis_agent import AutonomousAnalysisAgent
+from app.agent.api_testing_agent import AutonomousAPITestingAgent
 from app.agent.discovery_agent import AutonomousDiscoveryAgent
 from app.agent.healing_agent import AutonomousHealingAgent
 from app.agent.parallel_executor import ParallelExecutor
 from app.agent.types import AutonomousCampaignStatus, FailureCategory, HealingRecord
+from app.agent.visual_regression_agent import VisualRegressionAgent
 from app.services.llm_client import LLMClient
 
 logger = logging.getLogger("skywatch.agent.orchestrator")
@@ -40,17 +42,23 @@ class AutonomousAgentOrchestrator:
         llm_client: LLMClient | None = None,
         max_concurrency: int = 3,
         auto_heal_enabled: bool = True,
+        visual_regression_enabled: bool = False,
+        api_testing_enabled: bool = False,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.llm = llm_client
         self.max_concurrency = max_concurrency
         self.auto_heal_enabled = auto_heal_enabled
+        self.visual_regression_enabled = visual_regression_enabled
+        self.api_testing_enabled = api_testing_enabled
         self.progress_callback = progress_callback
 
         # Initialize sub-agents
         self.discovery_agent = AutonomousDiscoveryAgent(max_depth=2, max_pages=10)
         self.analysis_agent = AutonomousAnalysisAgent(llm_client=llm_client)
         self.healing_agent = AutonomousHealingAgent(min_confidence=0.70)
+        self.visual_regression_agent = VisualRegressionAgent()
+        self.api_testing_agent = AutonomousAPITestingAgent()
         self.parallel_executor = ParallelExecutor(
             max_concurrency=max_concurrency,
             progress_callback=self._on_executor_progress,
@@ -127,7 +135,38 @@ class AutonomousAgentOrchestrator:
         )
 
         # ---------------------------------------------------------------------
-        # 4. REPORT & GOVERNANCE PHASE
+        # 4. VISUAL REGRESSION PHASE (Optional)
+        # ---------------------------------------------------------------------
+        visual_report_data: dict[str, Any] | None = None
+        if self.visual_regression_enabled:
+            self._notify("visual_regression_started", {})
+            pages = discovery_result.get("pages", [])
+            visual_audit = await self.visual_regression_agent.run_visual_audit(
+                app_id=application_id,
+                pages=pages,
+            )
+            visual_report_data = visual_audit.to_dict()
+            self._notify("visual_regression_completed", {
+                "total_comparisons": visual_audit.total_comparisons,
+                "regressions": visual_audit.regressions,
+            })
+
+        # ---------------------------------------------------------------------
+        # 5. API TESTING PHASE (Optional)
+        # ---------------------------------------------------------------------
+        api_report_data: dict[str, Any] | None = None
+        if self.api_testing_enabled:
+            self._notify("api_testing_started", {})
+            api_audit = await self.api_testing_agent.run_api_audit(base_url=target_url)
+            api_report_data = api_audit.to_dict()
+            self._notify("api_testing_completed", {
+                "total_tests": api_audit.total_tests,
+                "passed": api_audit.passed,
+                "failed": api_audit.failed,
+            })
+
+        # ---------------------------------------------------------------------
+        # 6. REPORT & GOVERNANCE PHASE
         # ---------------------------------------------------------------------
         self.status = AutonomousCampaignStatus.COMPLETED
         duration_total_s = round(time.perf_counter() - start_time, 2)
@@ -138,7 +177,7 @@ class AutonomousAgentOrchestrator:
             defects_count=len(self.defects_found),
         )
 
-        report = {
+        report: dict[str, Any] = {
             "campaign_id": self.campaign_id,
             "application_id": application_id,
             "target_url": target_url,
@@ -171,6 +210,12 @@ class AutonomousAgentOrchestrator:
             "defects_discovered": self.defects_found,
             "recommendations": self._generate_campaign_recommendations(quality_score, len(self.defects_found)),
         }
+
+        # Attach optional audit reports
+        if visual_report_data is not None:
+            report["visual_regression"] = visual_report_data
+        if api_report_data is not None:
+            report["api_testing"] = api_report_data
 
         self._notify("campaign_completed", {"quality_score": quality_score, "duration_s": duration_total_s})
         return report

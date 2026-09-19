@@ -12,6 +12,7 @@ from app.api.v1.execution import router as execution_router
 from app.api.v1.execution_plans import router as execution_plans_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.mobile import router as mobile_router
+from app.api.v1.observability import router as observability_router
 from app.api.v1.orchestrator import router as orchestrator_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.reports import router as reports_router
@@ -24,6 +25,7 @@ from app.api.v1.test_suites import router as test_suites_router
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
 api_router.include_router(orchestrator_router)
+api_router.include_router(observability_router)
 api_router.include_router(agent_tasks_router)
 api_router.include_router(ai_generation_router)
 api_router.include_router(audit_router)

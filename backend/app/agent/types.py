@@ -301,3 +301,198 @@ class HealingRecord:
     duration_ms: float
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+
+# ---------------------------------------------------------------------------
+# Visual Regression Types
+# ---------------------------------------------------------------------------
+
+
+class VisualDiffCategory(str, Enum):
+    """Classification of visual differences between baseline and current screenshots."""
+    IDENTICAL = "identical"
+    COSMETIC = "cosmetic"              # Sub-pixel anti-aliasing, font rendering, minor color shifts
+    LAYOUT_SHIFT = "layout_shift"      # Element repositioning, spacing changes, responsive breakpoints
+    CONTENT_CHANGE = "content_change"  # Text/image content updated but layout intact
+    REGRESSION_BREAK = "regression_break"  # Significant structural or visual breakage
+
+
+@dataclass
+class BaselineSnapshot:
+    """A stored golden screenshot baseline for a specific route and viewport."""
+    app_id: int
+    route: str
+    viewport: str  # e.g. "1920x1080", "768x1024", "375x812"
+    image_hash: str
+    html_structure_hash: str
+    file_path: str
+    captured_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@dataclass
+class VisualDiffResult:
+    """Result of comparing a current screenshot against a baseline."""
+    route: str
+    viewport: str
+    category: VisualDiffCategory
+    diff_percentage: float  # 0.0 = identical, 100.0 = completely different
+    changed_regions: int
+    baseline_hash: str
+    current_hash: str
+    diff_image_path: str | None = None
+    details: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "route": self.route,
+            "viewport": self.viewport,
+            "category": self.category.value,
+            "diff_percentage": self.diff_percentage,
+            "changed_regions": self.changed_regions,
+            "baseline_hash": self.baseline_hash,
+            "current_hash": self.current_hash,
+            "diff_image_path": self.diff_image_path,
+            "details": self.details,
+        }
+
+
+@dataclass
+class VisualAuditReport:
+    """Aggregate visual regression audit report across routes and viewports."""
+    app_id: int
+    total_comparisons: int = 0
+    identical: int = 0
+    cosmetic: int = 0
+    layout_shifts: int = 0
+    content_changes: int = 0
+    regressions: int = 0
+    results: list[VisualDiffResult] = field(default_factory=list)
+    duration_seconds: float = 0.0
+    completed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "app_id": self.app_id,
+            "total_comparisons": self.total_comparisons,
+            "identical": self.identical,
+            "cosmetic": self.cosmetic,
+            "layout_shifts": self.layout_shifts,
+            "content_changes": self.content_changes,
+            "regressions": self.regressions,
+            "results": [r.to_dict() for r in self.results],
+            "duration_seconds": self.duration_seconds,
+            "completed_at": self.completed_at,
+        }
+
+
+# ---------------------------------------------------------------------------
+# API Testing Types
+# ---------------------------------------------------------------------------
+
+
+class APITestStatus(str, Enum):
+    """Status of an individual API test case execution."""
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    ERROR = "error"
+
+
+@dataclass
+class APITestCase:
+    """A single API test case generated from spec or manually defined."""
+    test_id: str
+    method: str  # GET, POST, PUT, PATCH, DELETE
+    path: str
+    description: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    query_params: dict[str, str] = field(default_factory=dict)
+    body: dict[str, Any] | None = None
+    expected_status: int = 200
+    expected_content_type: str = "application/json"
+    expected_schema: dict[str, Any] | None = None
+    tags: list[str] = field(default_factory=list)
+    is_negative_test: bool = False
+
+
+@dataclass
+class ContractViolation:
+    """A detected violation between API response and expected contract."""
+    field: str
+    expected: str
+    actual: str
+    severity: str = "error"  # error | warning
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "field": self.field,
+            "expected": self.expected,
+            "actual": self.actual,
+            "severity": self.severity,
+        }
+
+
+@dataclass
+class APITestResult:
+    """Result of executing a single API test case."""
+    test_id: str
+    method: str
+    path: str
+    status: APITestStatus
+    response_status_code: int = 0
+    response_time_ms: float = 0.0
+    violations: list[ContractViolation] = field(default_factory=list)
+    error_message: str = ""
+    response_body_preview: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "test_id": self.test_id,
+            "method": self.method,
+            "path": self.path,
+            "status": self.status.value,
+            "response_status_code": self.response_status_code,
+            "response_time_ms": self.response_time_ms,
+            "violations": [v.to_dict() for v in self.violations],
+            "error_message": self.error_message,
+            "response_body_preview": self.response_body_preview,
+        }
+
+
+@dataclass
+class APIAuditReport:
+    """Aggregate API testing audit report."""
+    base_url: str
+    total_tests: int = 0
+    passed: int = 0
+    failed: int = 0
+    errors: int = 0
+    skipped: int = 0
+    contract_violations: int = 0
+    avg_response_time_ms: float = 0.0
+    p50_response_time_ms: float = 0.0
+    p90_response_time_ms: float = 0.0
+    p99_response_time_ms: float = 0.0
+    results: list[APITestResult] = field(default_factory=list)
+    discovered_endpoints: int = 0
+    duration_seconds: float = 0.0
+    completed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "base_url": self.base_url,
+            "total_tests": self.total_tests,
+            "passed": self.passed,
+            "failed": self.failed,
+            "errors": self.errors,
+            "skipped": self.skipped,
+            "contract_violations": self.contract_violations,
+            "avg_response_time_ms": self.avg_response_time_ms,
+            "p50_response_time_ms": self.p50_response_time_ms,
+            "p90_response_time_ms": self.p90_response_time_ms,
+            "p99_response_time_ms": self.p99_response_time_ms,
+            "results": [r.to_dict() for r in self.results],
+            "discovered_endpoints": self.discovered_endpoints,
+            "duration_seconds": self.duration_seconds,
+            "completed_at": self.completed_at,
+        }
+

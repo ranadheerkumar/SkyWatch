@@ -5,6 +5,17 @@ All notable changes to the SkyWatch Autonomous Quality Assurance Platform are re
 ## [2.0.0] - 2026-09-18
 
 ### Added
+- **Advanced Jira Cloud REST API v3 & Tricentis qTest SaaS Integration**:
+  - Implemented `ADFBuilder` utility constructing rich Atlassian Document Format (ADF) v1 structures (severity panels, steps-to-reproduce tables, verification matrices, code blocks).
+  - Added bi-directional issue linking (`POST /rest/api/3/issueLink`) connecting newly filed bugs directly to parent user stories/epics.
+  - Added multipart attachment uploader (`POST /rest/api/3/issue/{key}/attachments`) with `X-Atlassian-Token: no-check` for visual regression diff PNGs, failure screenshots, and execution traces.
+  - Added autonomous workflow transition discovery and execution (`GET/POST /rest/api/3/issue/{key}/transitions`) enabling closed-loop re-verification and resolution.
+  - Implemented Tricentis qTest Build API integration (`GET/POST /api/v3/projects/{projectId}/builds`) tracking test execution runs against releases.
+  - Added auto-test-logs submission (`POST /api/v3/projects/{projectId}/test-runs/{runId}/auto-test-logs`) publishing real-time execution steps, durations, and pass/fail states into qTest.
+  - Added test case auto-export (`POST /api/v3/projects/{projectId}/test-cases`) and dynamic custom field schema discovery (`/settings/{objectType}/fields`).
+  - Added inbound webhook receivers (`/api/v1/integrations/webhooks/jira` and `/webhooks/qtest`) for event-driven test campaign triggers.
+  - Added 22 unit, contract, and API route tests in `backend/tests/test_jira_qtest_advanced.py` (all 196 platform tests passing).
+  - Added `docs/JIRA_QTEST_INTEGRATION_GUIDE.md` detailing architecture, API specification mappings, and configuration.
 - **Autonomous Agentic Testing Core**:
   - Implemented closed-loop `AutonomousAgentOrchestrator` coordinating Discover → Plan → Execute → Diagnose → Self-Heal → Learn → Report.
   - Implemented `AutonomousDiscoveryAgent` for depth-bounded page crawling, route mapping, and resilient multi-locator bundle synthesis (`data-testid`, semantic role, visible text, form relative, CSS, XPath).

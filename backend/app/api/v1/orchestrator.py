@@ -1,13 +1,3 @@
-"""Autonomous Agent Orchestration API Endpoints for SkyWatch.
-
-Exposes REST interfaces for:
-- Launching closed-loop autonomous QA campaigns
-- Querying live campaign status, quality scores, and healing records
-- Triggering on-demand application discovery and UI graph mapping
-- On-demand root cause failure diagnosis
-- On-demand step self-healing
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -18,9 +8,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from pydantic import BaseModel, Field
 
 from app.agent.analysis_agent import AutonomousAnalysisAgent
+from app.agent.api_testing_agent import AutonomousAPITestingAgent
 from app.agent.autonomous_orchestrator import AutonomousAgentOrchestrator
 from app.agent.discovery_agent import AutonomousDiscoveryAgent
 from app.agent.healing_agent import AutonomousHealingAgent
+from app.agent.visual_regression_agent import VisualRegressionAgent
 from app.api.dependencies import DbSession, current_user
 from app.models.application import Application
 from app.models.user import User
@@ -40,6 +32,8 @@ class CampaignLaunchRequest(BaseModel):
     objective: str = Field(default="Perform complete autonomous smoke, regression, and quality audit")
     max_concurrency: int = Field(default=3, ge=1, le=10)
     auto_heal_enabled: bool = True
+    visual_regression_enabled: bool = False
+    api_testing_enabled: bool = False
     credentials: dict[str, str] | None = None
     login_selectors: dict[str, str] | None = None
 
@@ -90,6 +84,8 @@ async def launch_campaign(
     orchestrator = AutonomousAgentOrchestrator(
         max_concurrency=payload.max_concurrency,
         auto_heal_enabled=payload.auto_heal_enabled,
+        visual_regression_enabled=payload.visual_regression_enabled,
+        api_testing_enabled=payload.api_testing_enabled,
     )
     campaign_id = orchestrator.campaign_id
     _ACTIVE_ORCHESTRATORS[campaign_id] = orchestrator
@@ -261,3 +257,75 @@ async def get_llm_providers_status(
         "available_count": len(configured_providers),
         "providers": providers,
     }
+
+
+# ---------------------------------------------------------------------------
+# On-Demand Visual Regression Audit
+# ---------------------------------------------------------------------------
+
+
+class VisualAuditRequest(BaseModel):
+    application_id: int
+    target_url: str
+    viewports: list[str] = Field(
+        default=["1920x1080", "768x1024", "375x812"],
+        description="Viewport sizes as 'WIDTHxHEIGHT' strings",
+    )
+
+
+@router.post("/visual-audit")
+async def run_visual_regression_audit(
+    payload: VisualAuditRequest,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Run an on-demand visual regression audit across configured viewports."""
+    viewports: list[tuple[str, int, int]] = []
+    for vp in payload.viewports:
+        parts = vp.lower().split("x")
+        if len(parts) == 2:
+            try:
+                viewports.append((vp, int(parts[0]), int(parts[1])))
+            except ValueError:
+                pass
+
+    if not viewports:
+        viewports = [("1920x1080", 1920, 1080)]
+
+    agent = VisualRegressionAgent(viewports=viewports)
+    pages = [{"url": payload.target_url}]
+    report = await agent.run_visual_audit(app_id=payload.application_id, pages=pages)
+    return report.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# On-Demand API Testing Audit
+# ---------------------------------------------------------------------------
+
+
+class APIAuditRequest(BaseModel):
+    base_url: str
+    auth_token: str | None = None
+    spec_url: str | None = None
+
+
+@router.post("/api-audit")
+async def run_api_testing_audit(
+    payload: APIAuditRequest,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Run an on-demand autonomous API contract testing audit."""
+    agent = AutonomousAPITestingAgent(auth_token=payload.auth_token)
+
+    spec: dict[str, Any] | None = None
+    if payload.spec_url:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(payload.spec_url)
+                if resp.status_code == 200:
+                    spec = resp.json()
+        except Exception:
+            pass
+
+    report = await agent.run_api_audit(base_url=payload.base_url, spec=spec)
+    return report.to_dict()

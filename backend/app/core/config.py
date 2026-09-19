@@ -154,13 +154,29 @@ class Settings:
     KEEP_BROWSER_OPEN_SECONDS: int = int(os.getenv("SKYWATCH_KEEP_BROWSER_OPEN_SECONDS", os.getenv("AI_QA_ENGINE_KEEP_BROWSER_OPEN_SECONDS", "6")))
     CAPTURE_SCREENSHOTS: bool = (os.getenv("SKYWATCH_CAPTURE_SCREENSHOTS") or os.getenv("AI_QA_ENGINE_CAPTURE_SCREENSHOTS", "true")).lower() in ("true", "1")
 
+    # Rate Limiting & Observability
+    RATE_LIMIT_ENABLED: bool = os.getenv("SKYWATCH_RATE_LIMIT_ENABLED", os.getenv("RATE_LIMIT_ENABLED", "true")).lower() in ("true", "1")
+
+    # Visual Regression Baselines
+    VISUAL_BASELINES_DIR: str = os.getenv("SKYWATCH_VISUAL_BASELINES_DIR", ".visual_baselines").strip()
+
+    # Advanced Jira & qTest Integration Settings
+    ENABLE_JIRA_WRITE: bool = os.getenv("ENABLE_JIRA_WRITE", "false").lower() in ("true", "1")
+    ENABLE_QTEST_WRITE: bool = os.getenv("ENABLE_QTEST_WRITE", "false").lower() in ("true", "1")
+    JIRA_AUTO_LINK_ISSUES: bool = os.getenv("JIRA_AUTO_LINK_ISSUES", "true").lower() in ("true", "1")
+    JIRA_AUTO_ATTACH_DIFFS: bool = os.getenv("JIRA_AUTO_ATTACH_DIFFS", "true").lower() in ("true", "1")
+    JIRA_AUTO_TRANSITION_RESOLVED: bool = os.getenv("JIRA_AUTO_TRANSITION_RESOLVED", "false").lower() in ("true", "1")
+    QTEST_AUTO_REGISTER_BUILDS: bool = os.getenv("QTEST_AUTO_REGISTER_BUILDS", "true").lower() in ("true", "1")
+    QTEST_DEFAULT_RELEASE_ID: str = os.getenv("QTEST_DEFAULT_RELEASE_ID", "").strip()
+    INTEGRATIONS_WEBHOOK_SECRET: str = os.getenv("INTEGRATIONS_WEBHOOK_SECRET", "").strip()
+
     # Queue & Worker Settings
     QUEUE_BACKEND: str = (os.getenv("SKYWATCH_QUEUE_BACKEND") or os.getenv("AI_QA_ENGINE_QUEUE_BACKEND", "local")).strip().lower()
     QUEUE_NAME: str = os.getenv("SKYWATCH_QUEUE_NAME", os.getenv("AI_QA_ENGINE_QUEUE_NAME", "skywatch-runs"))
     REDIS_URL: str = os.getenv("SKYWATCH_REDIS_URL", os.getenv("AI_QA_ENGINE_REDIS_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0")))
 
     def __post_init__(self) -> None:
-        if not self.INTEGRATIONS_READ_ONLY:
+        if not self.INTEGRATIONS_READ_ONLY and not (self.ENABLE_JIRA_WRITE or self.ENABLE_QTEST_WRITE):
             raise RuntimeError("SKYWATCH_INTEGRATIONS_READ_ONLY must remain true while external writes are disabled")
         if self.ENVIRONMENT.strip().lower() != "production":
             return
