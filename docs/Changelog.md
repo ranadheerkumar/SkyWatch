@@ -1,6 +1,31 @@
 # Changelog
 
-All notable changes to the AI QA Engine AI-powered QA Automation Platform are recorded here. The current version is `1.7.35`, maintained in `frontend/package.json`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.0`.
+
+## [2.0.0] - 2026-09-18
+
+### Added
+- **Autonomous Agentic Testing Core**:
+  - Implemented closed-loop `AutonomousAgentOrchestrator` coordinating Discover → Plan → Execute → Diagnose → Self-Heal → Learn → Report.
+  - Implemented `AutonomousDiscoveryAgent` for depth-bounded page crawling, route mapping, and resilient multi-locator bundle synthesis (`data-testid`, semantic role, visible text, form relative, CSS, XPath).
+  - Implemented `AutonomousAnalysisAgent` for intelligent root-cause diagnosis (`SELECTOR_DRIFT`, `REGRESSION_BUG`, `ENVIRONMENT_FLAKE`, `AUTH_FAILURE`, `TIMING_ISSUE`).
+  - Implemented `AutonomousHealingAgent` with live DOM candidate verification, auto-persistence to `TestCaseAutomation`, and continuous learning synchronization.
+  - Implemented `ParallelExecutor` with configurable worker pool concurrency and an adaptive **Circuit Breaker** to protect test environments against cascading failures.
+  - Added REST API endpoints at `/api/v1/orchestrator/` for campaign launching, on-demand discovery, failure diagnosis, and step self-healing.
+- **Enterprise Documentation & Architecture Guides**:
+  - Added `docs/AUTONOMOUS_TESTING_ENGINE.md` detailing the full autonomous testing architecture and closed loop.
+  - Added `docs/GIT_BRANCHING_STRATEGY.md` with modern enterprise GitFlow (`main`, `develop`, `poc`, `feature/*`, `release/*`, `hotfix/*`).
+  - Added `docs/JIRA_QTEST_CONNECTIVITY.md` covering zero-leakage credential management and safe read-only synchronization.
+
+### Security & Rebranding
+- **Security Hardening**:
+  - Scrubbed leaked tokens, credentials, and company-specific URLs from `.env` and `.env.example`.
+  - Configured write-only secret management for Jira and qTest tokens.
+  - Set `skywatch.db` as default SQLite database with fallback path resolution.
+- **Platform Rebranding**:
+  - Rebranded application surfaces and configuration from "AI QA Engine" to "SkyWatch".
+  - Updated CORS exposed headers to include `X-SkyWatch-*`.
+  - Preserved existing brand assets and logos per organizational requirements.
 
 ## [1.7.35] - 2026-09-14
 

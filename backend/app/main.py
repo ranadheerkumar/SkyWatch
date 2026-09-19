@@ -27,6 +27,8 @@ logger = logging.getLogger("ai-qa-engine.api")
 
 
 def ensure_initial_admin() -> None:
+	from app.core.database import Base, engine
+	Base.metadata.create_all(bind=engine)
 	with SessionLocal() as db:
 		admin_email = settings.INITIAL_ADMIN_EMAIL
 		admin_password = settings.INITIAL_ADMIN_PASSWORD
@@ -41,6 +43,17 @@ def ensure_initial_admin() -> None:
 			db.add(admin_user)
 			db.commit()
 
+		from app.models.application import Application
+		if db.query(Application).filter(Application.created_by == admin_user.id).first() is None:
+			default_app = Application(
+				name="SkyWatch Default App",
+				platform="web",
+				target="https://example.com",
+				created_by=admin_user.id,
+			)
+			db.add(default_app)
+			db.commit()
+
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 app.add_middleware(
@@ -50,6 +63,10 @@ app.add_middleware(
 	allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
 	allow_headers=["*"],
 	expose_headers=[
+		"X-SkyWatch-AI-Generation-Mode",
+		"X-SkyWatch-AI-Provider",
+		"X-SkyWatch-AI-Provider-Configured",
+		"X-SkyWatch-AI-Generation-Note",
 		"X-AI-QA-Engine-AI-Generation-Mode",
 		"X-AI-QA-Engine-AI-Provider",
 		"X-AI-QA-Engine-AI-Provider-Configured",

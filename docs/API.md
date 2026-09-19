@@ -1,6 +1,19 @@
-# AI-QA-Engine · REST API Reference
+# SkyWatch · REST API Reference
 
-The backend API is powered by FastAPI and available under the base prefix `/api/v1`.
+The SkyWatch backend API is powered by FastAPI and available under the base prefix `/api/v1`.
+
+---
+
+## 0. Autonomous Orchestration Engine (`/api/v1/orchestrator`)
+
+| Method | Endpoint | Description | Access |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/orchestrator/campaigns` | Launch full autonomous closed-loop QA campaign (Discover → Plan → Execute → Heal → Learn) | Tester+ |
+| `GET` | `/api/v1/orchestrator/campaigns` | List all recent autonomous campaigns | Authenticated |
+| `GET` | `/api/v1/orchestrator/campaigns/{id}` | Fetch campaign status, live report, defects, and self-healing audit | Authenticated |
+| `POST` | `/api/v1/orchestrator/discover` | On-demand application crawling, UI graph generation, and multi-locator blueprints | Tester+ |
+| `POST` | `/api/v1/orchestrator/diagnose` | Classify test failure into root causes (Selector Drift, Bug, Flake, Auth, Timing) | Authenticated |
+| `POST` | `/api/v1/orchestrator/heal-step` | On-demand selector self-healing with live DOM verification | Tester+ |
 
 ---
 

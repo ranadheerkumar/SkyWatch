@@ -2657,7 +2657,13 @@ async def resolve_action_with_agent(
     )
 
     # 1. Try LLM Provider settings with fast bounded timeout
-    for settings in _load_provider_settings(provider, model):
+    try:
+        provider_settings = _load_provider_settings(provider, model)
+    except Exception as err:
+        logger.debug("Execution agent could not load provider settings: %s", err)
+        provider_settings = []
+
+    for settings in provider_settings:
         try:
             parsed = await _request_provider_json(
                 settings,
@@ -2715,11 +2721,10 @@ async def resolve_action_with_agent(
         if is_auth_intent and (c.get("type") == "submit" or c.get("name") == "commit" or "sign in" in c_text_val or "log in" in c_text_val):
             score += 25
 
-        # Previous step container affinity: if previous step was an auth input (email/password), prioritize auth submit button in that form
-        if previous_step and previous_step.selector:
-            prev_sel_lower = previous_step.selector.lower()
-            if "password" in prev_sel_lower or "email" in prev_sel_lower or "user" in prev_sel_lower:
-                if c.get("type") == "submit" and ("commit" in c.get("name", "").lower() or "sign" in c_text_val or "log" in c_text_val):
+        # Previous step container affinity: if previous step was typing into a form field, prioritize form submit and penalize navigation
+        if previous_step:
+            if previous_step.action == "type" or (previous_step.selector and any(w in previous_step.selector.lower() for w in ["password", "email", "user", "zip", "search", "input", "query"])):
+                if c.get("type") == "submit" or (c_container == "form" and ("btn" in c.get("classes", "").lower() or c_tag in {"button", "input"})):
                     score += 35
                 elif c.get("container_type") == "navigation":
                     score -= 30

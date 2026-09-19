@@ -224,3 +224,80 @@ class AgentState:
             "completed_at": self.completed_at,
             "progress": self.plan.progress_percentage() if self.plan else 0,
         }
+
+
+class FailureCategory(str, Enum):
+    """Categorization of test execution step failure."""
+    SELECTOR_DRIFT = "selector_drift"
+    REGRESSION_BUG = "regression_bug"
+    ENVIRONMENT_FLAKE = "environment_flake"
+    AUTH_FAILURE = "auth_failure"
+    TIMING_ISSUE = "timing_issue"
+    ASSERTION_FAILURE = "assertion_failure"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class FailureDiagnosis:
+    """Diagnostic assessment produced by AutonomousAnalysisAgent."""
+    category: FailureCategory
+    confidence: float
+    root_cause: str
+    suggested_fix: str
+    evidence: dict[str, Any] = field(default_factory=dict)
+    candidate_selectors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class InteractiveElementBlueprint:
+    """Blueprint of an interactive UI element discovered on a page."""
+    element_id: str
+    tag: str
+    role: str | None = None
+    accessible_name: str | None = None
+    text_content: str | None = None
+    primary_selector: str = ""
+    resilient_selectors: list[str] = field(default_factory=list)
+    action_type: str = "click"  # click | type | select | check
+    is_form_submit: bool = False
+    parent_form: str | None = None
+    attributes: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class PageBlueprint:
+    """Discovered page model with structure, interactions, and route transitions."""
+    url: str
+    title: str
+    elements: list[InteractiveElementBlueprint] = field(default_factory=list)
+    outbound_links: list[str] = field(default_factory=list)
+    forms: list[dict[str, Any]] = field(default_factory=list)
+    discovered_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class AutonomousCampaignStatus(str, Enum):
+    """Status lifecycle of an autonomous testing campaign."""
+    IDLE = "idle"
+    DISCOVERING = "discovering"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    ANALYZING = "analyzing"
+    HEALING = "healing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    STOPPED = "stopped"
+
+
+@dataclass
+class HealingRecord:
+    """Audit record of a self-healed test step."""
+    test_id: str
+    step_index: int
+    original_selector: str
+    healed_selector: str
+    strategy: str  # learned_cache | fuzzy_text | aria_role | structural | proximity
+    confidence: float
+    validated_live: bool
+    duration_ms: float
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+

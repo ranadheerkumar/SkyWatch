@@ -346,7 +346,7 @@ export default function ExecutionRunDetailsPage() {
 
   const renderWithWorkspaceShell = (content: ReactNode) => (
     <WorkspaceShell
-      brandTitle="AI QA Engine"
+      brandTitle="SkyWatch"
       section="execution"
       apps={[]}
       selectedApplication={null}

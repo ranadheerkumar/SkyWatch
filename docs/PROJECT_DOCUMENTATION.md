@@ -1,43 +1,46 @@
-# AI QA Engine - Complete Project Documentation
+# SkyWatch - Complete Platform Documentation
 
-## 1) Project objective
+## 1) Project Objective
 
-This platform provides a single QA workspace to:
+SkyWatch is an **autonomous, self-learning Quality Assurance platform** designed to:
 
-- onboard applications (Web, Android, iOS metadata/artifacts),
-- generate or import test cases,
-- execute web automation runs,
-- track run outcomes and defects,
-- and accelerate coverage with AI-assisted test design.
-
-The main goal is to reduce manual QA effort while keeping flows understandable for non-AI and AI-assisted teams.
+- onboard applications across Web and Mobile channels,
+- autonomously discover application UI structures and state transition graphs,
+- plan and generate resilient test journeys without manual scripting,
+- execute concurrent browser test suites with circuit-breaker protection,
+- autonomously diagnose failures and self-heal drifting selectors with live DOM verification,
+- maintain a continuous learning locator repository for zero-latency execution adaptation,
+- integrate securely with enterprise systems (Jira, qTest) with zero hardcoded credentials,
+- and provide executive quality intelligence reporting.
 
 ---
 
-## 2) End-to-end architecture
+## 2) End-to-End Architecture
 
-### High-level flow
+### High-Level Flow
 
-1. User signs in to frontend.
-2. Frontend calls backend APIs for applications/test cases/execution.
-3. Backend stores data in SQL database (SQLite default; PostgreSQL-compatible design).
-4. AI generation is processed by one explicitly configured provider; provider failures are returned as actionable errors.
-5. Web execution requests are queued:
-   - local in-process worker (default), or
-   - Redis/RQ queue worker (scalable mode).
-6. Playwright runs browser actions/checks and returns result/logs/artifacts.
-7. Frontend displays execution progress, reports, and defects.
+1. User or CI/CD pipeline triggers an autonomous campaign or targeted test execution.
+2. The **Autonomous Discovery Agent** crawls target application routes, building resilient multi-locator blueprints.
+3. The **Autonomous Planner Agent** constructs prioritized user journeys and assertion criteria.
+4. The **Parallel Execution Engine** runs tests concurrently in headless Playwright browsers.
+5. If a step fails, the **Failure Analysis Agent** categorizes the root cause (`SELECTOR_DRIFT`, `REGRESSION_BUG`, `ENVIRONMENT_FLAKE`, etc.).
+6. For selector drift, the **Autonomous Healing Agent** live-validates candidate fixes, updates the test definition, and resumes execution.
+7. The **Self-Learning Engine** stores verified locators into memory and persistent vector store for future runs.
+8. Telemetry, video, screenshots, and defect links are consolidated into executive quality reports.
 
-### Major code surfaces
+### Major Code Surfaces
 
-- Frontend shell and page orchestration: `frontend/src/app/page.tsx`
-- API routes: `backend/app/api/v1/`
-- AI generation service: `backend/app/services/ai_service.py`
-- Execution engine: `backend/app/services/test_execution.py`
-- Queue adapter: `backend/app/services/run_queue.py`
-- Worker entrypoint (Redis mode): `backend/app/worker.py`
-- DB/session core: `backend/app/core/database.py`
-- Security/auth core: `backend/app/core/security.py`
+- Autonomous Agent Orchestrator: `backend/app/agent/autonomous_orchestrator.py`
+- Autonomous Discovery Agent: `backend/app/agent/discovery_agent.py`
+- Autonomous Failure Analysis Agent: `backend/app/agent/analysis_agent.py`
+- Autonomous Self-Healing Agent: `backend/app/agent/healing_agent.py`
+- Parallel Execution Engine: `backend/app/agent/parallel_executor.py`
+- Orchestrator REST API: `backend/app/api/v1/orchestrator.py`
+- Frontend Shell & Workspaces: `frontend/src/app/page.tsx`
+- Playwright Execution Engine: `backend/app/services/test_execution.py`
+- Continuous Adaptive Learning: `backend/app/services/self_learning.py`
+- DB / Session Core: `backend/app/core/database.py`
+- Security & Auth Core: `backend/app/core/security.py`
 
 ---
 

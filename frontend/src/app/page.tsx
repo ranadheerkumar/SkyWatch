@@ -92,8 +92,8 @@ const QualityReportsWorkspace = dynamic(() => import("../components/QualityRepor
 const CompleteBuildReportPanel = dynamic(() => import("../components/CompleteBuildReportPanel"));
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-const BRAND_TITLE = process.env.NEXT_PUBLIC_BRAND_TITLE ?? "AI QA Engine";
-const BRAND_SUBTITLE = process.env.NEXT_PUBLIC_BRAND_SUBTITLE ?? "Quality Assurance Workspace";
+const BRAND_TITLE = process.env.NEXT_PUBLIC_BRAND_TITLE ?? "SkyWatch";
+const BRAND_SUBTITLE = process.env.NEXT_PUBLIC_BRAND_SUBTITLE ?? "Autonomous QA Platform";
 const WORKSPACE_NAME = process.env.NEXT_PUBLIC_WORKSPACE_NAME ?? "QA Workspace";
 const PROJECT_NAME = process.env.NEXT_PUBLIC_PROJECT_NAME ?? "Default QA Project";
 const PRIMARY_PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID ?? "default-qa-project";

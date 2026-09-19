@@ -1,40 +1,45 @@
-# Project Documentation
+# SkyWatch Platform Documentation
 
-`docs/` is the canonical documentation root for the AI QA Engine AI-powered QA Automation Platform.
+`docs/` is the canonical documentation root for the **SkyWatch Autonomous Quality Assurance & Test Engineering Platform**.
 
 ## Core Platform Guides
 
-- [Project documentation](PROJECT_DOCUMENTATION.md)
-- [Architecture](PROJECT_ARCHITECTURE.md)
-- [Developer guide](DEVELOPER_GUIDE.md)
-- [User guide](USER_GUIDE.md)
-- [API reference](API.md)
-- [Contribution and source-control workflow](CONTRIBUTING.md)
-- [Security guide](Security-Guide.md)
-- [Testing strategy](Testing-Strategy.md)
-- [Deployment guide](DeploymentGuide.md)
-- [Troubleshooting guide](TroubleshootingGuide.md)
-- [AI configuration](AIConfiguration.md)
-- [Enterprise modernization report](ENTERPRISE_MODERNIZATION_REPORT.md)
+- [Project Overview & Capabilities](PROJECT_DOCUMENTATION.md)
+- [System Architecture](PROJECT_ARCHITECTURE.md)
+- [Autonomous Testing Engine & Orchestration](AUTONOMOUS_TESTING_ENGINE.md)
+- [Developer Guide](DEVELOPER_GUIDE.md)
+- [User Guide](USER_GUIDE.md)
+- [API Reference](API.md)
+- [Git Branching Strategy](GIT_BRANCHING_STRATEGY.md)
+- [Jira & qTest Enterprise Connectivity](JIRA_QTEST_CONNECTIVITY.md)
+- [Security Guide](Security-Guide.md)
+- [Testing Strategy](Testing-Strategy.md)
+- [Deployment Guide](DeploymentGuide.md)
+- [Troubleshooting Guide](TroubleshootingGuide.md)
+- [AI Configuration](AIConfiguration.md)
+- [Enterprise Modernization Report](ENTERPRISE_MODERNIZATION_REPORT.md)
 - [Changelog](Changelog.md)
 
-## Multi-Agent Architecture & Workflows
+## Autonomous Agentic Architecture & Workflows
 
-- [Current agent architecture](CURRENT_AGENT_ARCHITECTURE.md)
-- [Future agent architecture](FUTURE_AGENT_ARCHITECTURE.md)
-- [Agent orchestration](AGENT_ORCHESTRATION.md)
-- [Planner Agent](PLANNER_AGENT.md)
-- [Application Discovery Agent](DISCOVERY_AGENT.md)
-- [Scenario Agent](SCENARIO_AGENT.md)
-- [Test Data Generator Agent](TEST_DATA_GENERATOR_AGENT.md)
+- [Autonomous Testing Engine (Closed-Loop)](AUTONOMOUS_TESTING_ENGINE.md)
+- [Current Agent Architecture](CURRENT_AGENT_ARCHITECTURE.md)
+- [Future Agent Architecture](FUTURE_AGENT_ARCHITECTURE.md)
+- [Agent Orchestration Loop](AGENT_ORCHESTRATION.md)
+- [Autonomous Application Discovery Agent](DISCOVERY_AGENT.md)
+- [Autonomous Failure Analysis & Classification](AUTONOMOUS_TESTING_ENGINE.md#failure-analysis-agent)
+- [Self-Healing Execution Agent](AUTONOMOUS_TESTING_ENGINE.md#autonomous-self-healing-agent)
 - [Self-Learning & Adaptive Entity Engine](SELF_LEARNING_ENGINE.md)
+- [Planner Agent](PLANNER_AGENT.md)
+- [Scenario Generation Agent](SCENARIO_AGENT.md)
+- [Test Data Generator Agent](TEST_DATA_GENERATOR_AGENT.md)
 - [Execution Agent](EXECUTION_AGENT.md)
-- [Evidence Agent](EVIDENCE_AGENT.md)
-- [Reporting Agent](REPORTING_AGENT.md)
-- [AI requirement document workflow](AI_DOCUMENT_WORKFLOW.md)
+- [Evidence & Artifact Agent](EVIDENCE_AGENT.md)
+- [Reporting & Quality Intelligence Agent](REPORTING_AGENT.md)
+- [AI Requirement Document Workflow](AI_DOCUMENT_WORKFLOW.md)
 - [AI Test Design Studio](AI_TEST_DESIGN_STUDIO.md)
 
 ## Reference Assets
 
-- [Apollo automation reference workbook](Apollo_Automation_Combined.xlsx)
-- [Asta Apollo test matrix workbook](Testing_Asta_Apollo.xlsx)
+- [Apollo Automation Combined Workbook](Apollo_Automation_Combined.xlsx)
+- [Asta Apollo Test Matrix Workbook](Testing_Asta_Apollo.xlsx)
