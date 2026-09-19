@@ -256,10 +256,33 @@ class LLMClient:
     def __init__(self, config: LLMProviderConfig | None = None) -> None:
         self.config = config or _resolve_provider_config()
         self._cumulative_usage = LLMUsage()
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def cumulative_usage(self) -> LLMUsage:
         return self._cumulative_usage
+
+    async def get_http_client(self, timeout_seconds: int | None = None) -> httpx.AsyncClient:
+        """Get or initialize a pooled reusable HTTP client with connection pooling."""
+        effective_timeout = float(timeout_seconds or self.config.timeout_seconds)
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=effective_timeout,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the reusable HTTP client session."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def __aenter__(self) -> LLMClient:
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.aclose()
 
     async def complete(
         self,
@@ -368,8 +391,8 @@ class LLMClient:
         current_payload = payload
         for attempt in range(effective_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=float(timeout_seconds)) as client:
-                    response = await client.post(endpoint, headers=headers, json=current_payload)
+                client = await self.get_http_client(timeout_seconds)
+                response = await client.post(endpoint, headers=headers, json=current_payload)
             except httpx.HTTPError as error:
                 if attempt < effective_retries:
                     await asyncio.sleep(1.0 * (attempt + 1))

@@ -196,6 +196,15 @@ def test_enterprise_e2e_lifecycle(enterprise_client):
     assert run_status_res.status_code == 200
     assert run_status_res.json()["run_id"] == run_id
 
+    # Verify Allure 2 report generation and export
+    allure_res = client.get(f"/api/v1/execution/{run_id}/allure")
+    assert allure_res.status_code == 200, f"Allure export failed: {allure_res.text}"
+    allure_data = allure_res.json()
+    assert allure_data["format"] == "allure2"
+    assert "summary" in allure_data
+    assert "results" in allure_data
+    assert len(allure_data["results"]) >= 1
+
     # -------------------------------------------------------------------------
     # Step 7: Release Intelligence & Defect Logging Lifecycle
     # -------------------------------------------------------------------------

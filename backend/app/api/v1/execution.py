@@ -672,6 +672,40 @@ def get_run(
     )
 
 
+@router.get("/{run_id}/allure")
+def export_run_allure(
+    run_id: str,
+    db: DbSession,
+    user: User = Depends(current_user),
+) -> dict:
+    """Export test run execution result in standard Allure 2 JSON format."""
+    run = (
+        db.query(TestRun)
+        .filter(
+            TestRun.id == run_id,
+            TestRun.created_by == user.id,
+        )
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    from app.services.allure_reporter import generate_allure_result_from_run, export_allure_suite
+    result_data = run.result or {}
+    test_case_title = result_data.get("title") or run.build_name or f"Run {run.id[:8]}"
+
+    allure_result = generate_allure_result_from_run(
+        run_id=run.id,
+        test_case_title=test_case_title,
+        status=run.status,
+        duration_ms=result_data.get("duration_ms", 0),
+        error_message=result_data.get("error") or result_data.get("failure_summary"),
+        steps=run.steps or [],
+        attachments=result_data.get("step_artifacts") or result_data.get("artifacts") or [],
+    )
+    return export_allure_suite([allure_result])
+
+
 @router.post("/{run_id}/cancel")
 def cancel_run(
     run_id: str,

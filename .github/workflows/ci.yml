@@ -75,11 +75,21 @@ jobs:
           python -m alembic upgrade head
           python -m alembic check
 
+      - name: Validate OpenAPI specification
+        working-directory: backend
+        run: python -c "from app.main import app; app.openapi()"
+
       - name: Run backend tests
         working-directory: backend
         env:
           DATABASE_URL: sqlite:///./ci-migration.db
         run: python -m pytest -q tests
+
+      - name: Run enterprise E2E test
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite:///./ci-migration.db
+        run: python -m pytest -v tests/test_enterprise_e2e.py
 
       - name: Audit Python dependencies
         run: python -m pip_audit -r backend/requirements.txt

@@ -1,5 +1,11 @@
 # Workspace Delivery Policy
 
+> [!IMPORTANT]
+> **MANDATORY COMMIT MESSAGE CONVENTION**:
+> Every commit message in this repository MUST start with the application SemVer prefix matching `frontend/package.json`:
+> **`v<MAJOR>.<MINOR>.<PATCH>: <type>(<scope>): <summary>`** (e.g. `v2.1.0: feat(arch): modularize page.tsx, add telemetry, allure reporting, and connection pooling`).
+> **NEVER omit the `vX.Y.Z:` prefix** from any commit message. Automated release pipelines, version verification scripts (`node scripts/verify-version.mjs --require-history-bump`), and Git changelog history strictly enforce this prefix.
+
 ## Automatic source-change publishing
 
 When completing a requested change to frontend/UI code or application source code in this repository:
@@ -9,7 +15,7 @@ When completing a requested change to frontend/UI code or application source cod
 3. Run `node scripts/verify-version.mjs --require-bump` before committing; CI enforces the committed version increase with `node scripts/verify-version.mjs --require-history-bump`.
 4. Review `git status`, `git diff --check`, and `git diff --stat`.
 5. Stage only the intended source, test, configuration, and documentation files.
-6. Create a concise reviewable commit prefixed with the application SemVer (e.g. `vX.Y.Z: <type>(<scope>): <summary>` or `vX.Y.Z: <summary>`). Every commit message MUST explicitly include the version prefix matching `frontend/package.json` (e.g. `v2.0.1: ...`) to ensure release traceability, keep commit logs standardized, and prevent version hallucinations.
+6. Create a concise reviewable commit strictly prefixed with the application SemVer: **`vX.Y.Z: <type>(<scope>): <summary>`** (e.g. `v2.1.0: feat(...): ...`). Every commit message MUST explicitly include the version prefix matching `frontend/package.json` to ensure release traceability, keep commit logs standardized, and prevent version hallucinations. Commits omitting `vX.Y.Z:` will fail CI and violate delivery policy.
 7. Push the commit to the current branch's configured upstream remote (`origin/develop` or `origin/AutomationTool_POC`). Do NOT sync, merge, or push changes to `AutomationTool_POC_lkurra`.
 8. Confirm the local branch and configured upstream resolve to the same commit, then report the commit and validation results.
 
@@ -97,3 +103,24 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
 - Dynamic Resilience:
   - Avoid hardcoded CSS selectors (e.g. `#user_email`). Always use resilient multi-selector fallback chains (`input[type=email], #email, [name=email]`, etc.).
   - Starter cases must dynamically reference the active application name and target URL.
+- OpenTelemetry Distributed Tracing (`backend/app/core/telemetry.py`):
+  - Provides lightweight, non-blocking distributed tracing via `trace_span(name, attributes)` context manager and `@traced(span_name)` decorator.
+  - Features an automatic zero-dependency in-memory timing fallback with structured JSON telemetry logging if the OpenTelemetry SDK is unconfigured.
+  - Active instrumentation spans AI scenario generation jobs (`generate_scenarios_job`), test execution orchestration (`execute_test_case`), and LLM provider invocations (`_generate_with_retry`).
+- Allure 2 Test Execution Reporting (`backend/app/services/allure_reporter.py` & `GET /api/v1/execution/{run_id}/allure`):
+  - Industry-standard test reporting export endpoint generating Allure 2 JSON results.
+  - Captures test parameters, status mapping (`passed`, `failed`, `broken`, `skipped`), sub-second step timings, error messages, and attachments (Playwright traces, browser logs, console output).
+- High-Performance LLM Connection Pooling (`backend/app/services/llm_client.py`):
+  - Uses pooled `httpx.AsyncClient` instances configured with `httpx.Limits(max_connections=20, max_keepalive_connections=10)` to eliminate connection churn during high-concurrency scenario synthesis.
+- GZip Middleware & OpenAPI Schema Enhancements (`backend/app/main.py`):
+  - Fast GZip response compression enabled with `minimum_size=1000` to optimize data transfer for large test suites, Playwright scripts, and batch run histories.
+  - Rich OpenAPI 3.1.0 metadata with descriptive operational tagging and automatic SemVer reflection.
+- Modularized Frontend Architecture (`frontend/src/lib/` & `frontend/src/components/`):
+  - Monolithic `frontend/src/app/page.tsx` is modularized into specialized modules to guarantee maintainability and separation of concerns:
+    - `frontend/src/lib/runtimeParameters.ts`: Execution parameters, test data parsing, and runtime environment resolution.
+    - `frontend/src/lib/distributions.ts`: Status, category, priority, and timing distribution analytics for release dashboards.
+    - `frontend/src/lib/speech.ts`: Web Speech API synthesis for natural voice execution announcements.
+    - `frontend/src/lib/testCaseHelpers.ts`: Test case step numbering, formatting, validation, and cloning helpers.
+    - `frontend/src/lib/api-client.ts`: Unified typed client wrappers for execution, runs, suites, and reports.
+    - `frontend/src/components/ui/DashboardWidgets.tsx`: Reusable KPI cards, distribution charts, and timeline widgets.
+    - `frontend/src/components/ExecutionDiagnosticsPanel.tsx`: Live console log streaming, step telemetry, and run diagnostics.

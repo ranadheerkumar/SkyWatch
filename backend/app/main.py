@@ -56,7 +56,29 @@ def ensure_initial_admin() -> None:
 			db.commit()
 
 
-app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
+openapi_tags = [
+	{"name": "Auth", "description": "Authentication, token verification, and user management"},
+	{"name": "Applications", "description": "Target applications and platform configurations"},
+	{"name": "Test Cases", "description": "Test case authoring, retrieval, updates, and smart data generation"},
+	{"name": "AI Generation", "description": "Multi-provider AI test generation, vision discovery, and synthesis"},
+	{"name": "Execution", "description": "Playwright test execution, step runner, and Allure exports"},
+	{"name": "Defects", "description": "Defect tracking, automatic root cause analysis, and Jira/Linear sync"},
+	{"name": "Healing & Agents", "description": "Autonomous self-healing, heuristic repairs, and DOM resolution"},
+	{"name": "Observability", "description": "System health, live telemetry, execution metrics, and rate limiting"},
+	{"name": "Settings", "description": "AI provider configuration, connection testing, and runtime settings"},
+]
+
+from starlette.middleware.gzip import GZipMiddleware
+
+app = FastAPI(
+	title=settings.APP_NAME,
+	version=settings.APP_VERSION,
+	description="SkyWatch Autonomous Enterprise QA Platform — AI-Driven Test Generation, Self-Healing Execution & Observability Engine",
+	openapi_tags=openapi_tags,
+	docs_url="/docs",
+	redoc_url="/redoc",
+)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
 	CORSMiddleware,
 	allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0):\d+",

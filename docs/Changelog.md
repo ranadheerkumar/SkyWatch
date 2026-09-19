@@ -1,6 +1,34 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.9`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.1.0`.
+
+## [2.1.0] - 2026-09-19
+
+### Added
+- **OpenTelemetry Distributed Tracing (`app/core/telemetry.py`)**:
+  - Implemented non-blocking, zero-overhead OpenTelemetry distributed tracing framework with `trace_span` context manager and `@traced` function decorator.
+  - Automatic fallback to high-resolution in-memory timing and logging when OpenTelemetry SDK is not installed or configured.
+  - Wired distributed trace instrumentation across AI Scenario Generation (`generate_scenarios_job`), Test Execution Runner (`execute_test_case`), and LLM Client calls (`_generate_with_retry`).
+- **Allure 2 Test Execution Reporting (`app/services/allure_reporter.py`)**:
+  - Added industry-standard Allure 2 test results exporter (`GET /api/v1/execution/{run_id}/allure`) packaging test status, duration, environment parameters, attachments (Playwright traces, logs, error messages), and step breakdowns into Allure format.
+- **HTTP Client Connection Pooling & Resiliency (`app/services/llm_client.py`)**:
+  - Added persistent connection pooling via `httpx.Limits(max_connections=20, max_keepalive_connections=10)` for high-concurrency LLM provider requests.
+- **Response GZip Compression & OpenAPI Enhancements (`app/main.py`)**:
+  - Added FastAPI `GZipMiddleware(minimum_size=1000)` to compress large JSON responses (Playwright suites, run history, test cases).
+  - Added comprehensive OpenAPI metadata (title, summary, description, tags, version) to Swagger/OpenAPI documentation.
+- **Modular Frontend Architecture**:
+  - Extracted 1,320+ lines of monolithic logic from `frontend/src/app/page.tsx` into modular libraries and presentation components:
+    - `frontend/src/lib/runtimeParameters.ts`: Default parameter resolution, test data parsing, execution runtime configs.
+    - `frontend/src/lib/distributions.ts`: Status, category, priority, and timing distribution aggregations for release dashboards.
+    - `frontend/src/lib/speech.ts`: Web Speech API synthesis for natural voice announcements during execution.
+    - `frontend/src/lib/testCaseHelpers.ts`: Test case step numbering, formatting, validation, and cloning helpers.
+    - `frontend/src/lib/api-client.ts`: Unified API client wrappers for execution, runs, suites, and reports.
+    - `frontend/src/components/ui/DashboardWidgets.tsx`: Reusable KPI cards, donut distributions, and timeline widgets.
+    - `frontend/src/components/ExecutionDiagnosticsPanel.tsx`: Live execution diagnostics, console log streaming, and telemetry inspector.
+
+### Changed
+- **`frontend/src/app/page.tsx`**:
+  - Modularized and streamlined state management, reducing cognitive load and file size while keeping 100% feature and UI parity.
 
 ## [2.0.9] - 2026-09-19
 
