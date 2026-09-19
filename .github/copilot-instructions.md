@@ -50,6 +50,12 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
 - API Testing Agent (`docs/API_TESTING_AGENT.md`): OpenAPI/Swagger auto-discovery, schema contract validation, negative/boundary payload generation, and latency profiling.
 - Observability & Rate Limiting (`docs/OBSERVABILITY_GUIDE.md`): Token bucket rate limiting per endpoint group, circuit breaking, and aggregated metric telemetry (`/api/v1/observability/metrics`).
 - Multi-LLM Architecture: Dynamic cascade supporting Google Gemini, GitHub Copilot, OpenAI, Anthropic, and Azure based on available environment credentials with zero generic fallback lock-in.
+  - Google Gemini: Configured with active models (`gemini-flash-latest` [default], `gemini-pro-latest`, `gemini-3.7-flash`, `gemini-2.5-flash`, and `gemini-2.5-pro`). Never reference or default to deprecated models (`gemini-1.5-pro`, `gemini-1.5-flash`, `gemini-2.0-flash`) which return 404 NOT FOUND from Google's Generative Language API.
+  - Live Model Discovery: `POST /api/v1/settings/ai-models` discovers models dynamically from provider endpoints.
+  - Probe Token Budget: Connectivity probes must reserve at least 128 tokens to accommodate modern thinking/reasoning signatures before content completion.
+  - Offline Mock Simulation: Local inference provider supports built-in simulation for credential-free local development and testing.
+- Smart Test Data Generator Agent (`docs/TEST_DATA_GENERATOR_AGENT.md`): Synthesizes balanced, type-safe datasets covering valid, invalid, boundary, and edge/security scenarios with self-learning entity adaptation.
+- Self-Learning Engine (`docs/SELF_LEARNING_ENGINE.md`): Continuously harvests verified locator resolutions, assertion outcomes, and domain entities from passing/healed executions into durable vector memory.
 - Enterprise ALM Bridge (`docs/JIRA_QTEST_INTEGRATION_GUIDE.md`): Jira Cloud REST API v3 with Atlassian Document Format (ADF v1), bi-directional issue linking, multipart attachment uploads, and workflow transitions; Tricentis qTest SaaS Build API hierarchy (`/projects/{projectId}/builds`), auto-test-logs execution reporting, and dynamic custom field validation. Respect `ENABLE_JIRA_WRITE` and `ENABLE_QTEST_WRITE` safety controls.
 - Local Application Startup & Service Topology:
   - Backend: FastAPI/Uvicorn on `http://127.0.0.1:8000` (`PYTHONPATH=. .venv/bin/python3 -m app.core.migration_bootstrap && PYTHONPATH=. .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000`).

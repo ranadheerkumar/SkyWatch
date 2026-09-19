@@ -1,6 +1,13 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.3`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.4`.
+
+## [2.0.4] - 2026-09-19
+
+### Documentation
+- **Copilot Instructions Grounding & Contract Synchronization**:
+  - Grounded `.github/copilot-instructions.md` with active Google Gemini models (`gemini-flash-latest`, `gemini-pro-latest`, `gemini-3.7-flash`, etc.) and anti-hallucination rules regarding deprecated 1.5/2.0-flash models.
+  - Formulated contracts for Smart Test Data Generator Agent (`docs/TEST_DATA_GENERATOR_AGENT.md`) and Self-Learning Engine (`docs/SELF_LEARNING_ENGINE.md`).
 
 ## [2.0.3] - 2026-09-19
 
