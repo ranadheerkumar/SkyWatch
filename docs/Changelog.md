@@ -1,6 +1,15 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.1`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.0.2`.
+
+## [2.0.2] - 2026-09-19
+
+### Fixed
+- **SettingsStudio UI Feedback & Provider Error Resolution**:
+  - Fixed false `0` rendering bug caused by truthiness check on `latency_ms` when zero milliseconds.
+  - Enhanced AI provider connectivity probe with actionable setup and configuration instructions for Google Gemini, Copilot, OpenAI, and Anthropic.
+  - Added in-UI guidance banner with direct link to Google AI Studio when Gemini provider is selected without credentials.
+  - Supported mock/offline simulation in local inference mode.
 
 ## [2.0.1] - 2026-09-19
 

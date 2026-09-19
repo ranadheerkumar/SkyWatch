@@ -2789,7 +2789,40 @@ async def test_ai_provider_connection(
 ) -> dict[str, str | int]:
     provider_settings = _provider_settings_for_connection(provider, model, api_key, endpoint)
     if provider_settings.provider != "local" and not provider_settings.api_key:
-        raise AIServiceError(f"{provider_settings.provider} API key is not configured.")
+        if provider_settings.provider == "gemini":
+            raise AIServiceError(
+                "Gemini API key is not configured. Please paste your Google Gemini API key into the "
+                "'API Key Override' field above and click 'Save AI Configuration', or set GEMINI_API_KEY in backend/.env. "
+                "(Get a free key from Google AI Studio: https://aistudio.google.com/app/apikey)"
+            )
+        elif provider_settings.provider == "github_copilot":
+            raise AIServiceError(
+                "GitHub Copilot token is not configured. Set GITHUB_TOKEN in backend/.env or enter your token in the API Key field above."
+            )
+        elif provider_settings.provider == "openai":
+            raise AIServiceError(
+                "OpenAI API key is not configured. Set OPENAI_API_KEY in backend/.env or enter your key above."
+            )
+        elif provider_settings.provider == "anthropic":
+            raise AIServiceError(
+                "Anthropic API key is not configured. Set ANTHROPIC_API_KEY in backend/.env or enter your key above."
+            )
+        else:
+            raise AIServiceError(
+                f"{provider_settings.provider.replace('_', ' ').title()} API key is not configured. Please set the API key in the field above or in backend/.env."
+            )
+
+    if provider_settings.provider == "local" and (
+        "mock" in provider_settings.base_url.lower()
+        or "offline" in provider_settings.base_url.lower()
+        or "mock" in provider_settings.model.lower()
+    ):
+        return {
+            "provider": "local",
+            "model": provider_settings.model,
+            "response": '{"status": "ok", "mode": "offline_mock"}',
+            "latency_ms": 1,
+        }
 
     payload = _build_provider_payload(
         provider_settings,

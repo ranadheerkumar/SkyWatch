@@ -444,6 +444,15 @@ export default function SettingsStudio({
                 <span style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px", display: "block" }}>
                   Credential status: <strong>{credentialStatus}</strong>
                 </span>
+                {selectedProvider === "gemini" && !apiKeyInput && credentialStatus.includes("Not configured") && (
+                  <div style={{ fontSize: "12px", color: "#1e40af", marginTop: "8px", background: "rgba(59, 130, 246, 0.08)", padding: "8px 12px", borderRadius: "6px", border: "1px solid rgba(59, 130, 246, 0.2)", lineHeight: "1.4" }}>
+                    💡 <strong>Google Gemini API Key:</strong> Obtain a free key at{" "}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 600 }}>
+                      Google AI Studio ↗
+                    </a>
+                    , paste it above, and click <strong>Save AI Configuration</strong>.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -548,9 +557,9 @@ export default function SettingsStudio({
                     {testResult.status === "success" ? "✓ Connection Verified" : "✗ Connection Error"}
                   </div>
                   <div>{testResult.message}</div>
-                  {testResult.latency_ms && (
+                  {typeof testResult.latency_ms === "number" && testResult.latency_ms > 0 ? (
                     <div style={{ fontSize: "11px", marginTop: "2px" }}>Response Latency: {formatDuration(testResult.latency_ms)}</div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
