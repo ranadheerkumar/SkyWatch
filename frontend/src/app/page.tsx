@@ -5084,6 +5084,15 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="secondary btn-sm"
+              style={{ height: "26px", padding: "0 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={openCreateProjectModal}
+              title="Create new project"
+            >
+              + New
+            </button>
             <label className="dashboard-scope-control" htmlFor="dashboard-scope-selector" title="Switch active target application">
               <span style={{ fontSize: "11px" }}>Target:</span>
               <select
@@ -5095,6 +5104,15 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
                 {apps.length ? apps.map((item) => <option key={`dashboard-scope-${item.id ?? item.name}`} value={item.name}>📱 {item.name} ({formatPlatformLabel(item.platform)})</option>) : <option value="">No applications connected</option>}
               </select>
             </label>
+            <button
+              type="button"
+              className="secondary btn-sm"
+              style={{ height: "26px", padding: "0 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={() => navigateToSection("applications")}
+              title="Add target application"
+            >
+              + Add App
+            </button>
           </div>
         </div>
         <div className="dashboard-hero-actions dashboard-action-row">
@@ -5110,8 +5128,10 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
             <AppIcon name="execution" />
             <span>Run tests</span>
           </button>
-          <button className="secondary btn-sm" onClick={() => navigateToSection("projects")}>Projects ({projectCatalog.length})</button>
-          <button className="secondary btn-sm" onClick={() => navigateToSection("applications")}>Apps ({apps.length})</button>
+          <button className="secondary btn-sm" onClick={() => navigateToSection("projects")}>📁 Projects ({projectCatalog.length})</button>
+          <button className="secondary btn-sm" onClick={() => navigateToSection("applications")}>📱 Apps ({apps.length})</button>
+          <button className="secondary btn-sm" onClick={openCreateProjectModal} title="Create a new QA project">+ Project</button>
+          <button className="secondary btn-sm" onClick={() => navigateToSection("applications")} title="Add target application">+ Add App</button>
           <button className="secondary btn-sm" onClick={() => void loadDashboardData(token, app?.name)} disabled={refreshingData}>
             {refreshingData ? "..." : "Refresh"}
           </button>
@@ -5956,77 +5976,6 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
           )}
         </section>
       )}
-
-      {projectModalMode && (
-        <div
-          className="projects-modal-overlay"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !projectFormName.trim() && !projectFormDescription.trim()) {
-              closeProjectModal();
-            }
-          }}
-        >
-          <div
-            className="panel projects-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="project-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="projects-modal-head">
-              <div>
-                <h3 id="project-modal-title">{projectModalMode === "create" ? "New project setup" : "Update project details"}</h3>
-              </div>
-              <button type="button" className="secondary btn-sm" onClick={closeProjectModal} aria-label="Close project modal">Close</button>
-            </div>
-            <p className="muted">Define the project context to keep applications, runs, and quality metrics organized.</p>
-            <form
-              className="projects-modal-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveProjectFromModal();
-              }}
-            >
-              <label htmlFor="project-name">
-                Project name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="project-name"
-                value={projectFormName}
-                onChange={(event) => {
-                  setProjectFormName(event.target.value);
-                  if (projectFormError) setProjectFormError("");
-                }}
-                placeholder="Example: Checkout Reliability"
-                required
-              />
-              <label htmlFor="project-description">Description</label>
-              <textarea
-                id="project-description"
-                value={projectFormDescription}
-                onChange={(event) => setProjectFormDescription(event.target.value)}
-                placeholder="Summarize scope, ownership, and quality goals."
-              />
-              <label htmlFor="project-lifecycle">Lifecycle</label>
-              <select
-                id="project-lifecycle"
-                value={projectFormLifecycle}
-                onChange={(event) => setProjectFormLifecycle(event.target.value as ProjectLifecycle)}
-              >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="archived">Archived</option>
-              </select>
-              {projectFormError && <p className="form-error">{projectFormError}</p>}
-              <div className="projects-modal-actions">
-                <button type="button" className="secondary" onClick={closeProjectModal} disabled={savingProject}>Cancel</button>
-                <button type="submit" className="primary" disabled={savingProject}>{savingProject ? "Saving..." : projectModalMode === "create" ? "Create project" : "Save changes"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 
@@ -6498,78 +6447,6 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
           </table>
         </div>
       </section>
-      {applicationEditingId !== null && (
-        <div
-          className="projects-modal-overlay"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !applicationFormName.trim() && !applicationFormTarget.trim()) {
-              closeApplicationEditModal();
-            }
-          }}
-        >
-          <div
-            className="panel projects-modal applications-edit-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="application-edit-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="projects-modal-head">
-              <div>
-                <h3 id="application-edit-modal-title">Update target and name</h3>
-              </div>
-              <button type="button" className="secondary btn-sm" onClick={closeApplicationEditModal} aria-label="Close application edit modal">
-                Close
-              </button>
-            </div>
-            <p className="muted">Keep application details current so AI discovery and execution run against the correct target.</p>
-            <form
-              className="projects-modal-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveApplicationFromModal();
-              }}
-            >
-              <label htmlFor="application-edit-name">
-                Application name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="application-edit-name"
-                value={applicationFormName}
-                onChange={(event) => {
-                  setApplicationFormName(event.target.value);
-                  setApplicationFormError("");
-                }}
-                placeholder="e.g. Customer Portal"
-              />
-              <label htmlFor="application-edit-platform">Platform</label>
-              <input id="application-edit-platform" value={formatPlatformLabel(applicationFormPlatform)} disabled />
-              <label htmlFor="application-edit-target">
-                {applicationFormPlatform === "web" ? "Target URL" : "Package path"} <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="application-edit-target"
-                value={applicationFormTarget}
-                onChange={(event) => {
-                  setApplicationFormTarget(event.target.value);
-                  setApplicationFormError("");
-                }}
-                placeholder={applicationFormPlatform === "web" ? "https://your-app.example.com" : "uploads/application-build.apk"}
-              />
-              {applicationFormError && <p className="form-error">{applicationFormError}</p>}
-              <div className="projects-modal-actions">
-                <button type="button" className="secondary" onClick={closeApplicationEditModal} disabled={savingApplicationEdit}>
-                  Cancel
-                </button>
-                <button type="submit" className="primary" disabled={savingApplicationEdit}>
-                  {savingApplicationEdit ? "Saving..." : "Save changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 
@@ -8109,80 +7986,6 @@ Example (Markdown Table):
         onRefresh={() => void loadDashboardData(token, app?.name)}
         notify={notify}
       />
-      {defectModalMode && (
-        <div
-          className="projects-modal-overlay"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !defectFormTitle.trim() && !defectFormDescription.trim()) {
-              closeDefectModal(false);
-            }
-          }}
-        >
-          <div
-            className="panel projects-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="defect-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="projects-modal-head">
-              <div>
-                <h3 id="defect-modal-title">{defectModalMode === "create" ? "Capture a quality issue" : "Update defect details"}</h3>
-              </div>
-              <button type="button" className="secondary btn-sm" onClick={() => closeDefectModal(false)} disabled={savingDefect}>Close</button>
-            </div>
-            <form
-              className="projects-modal-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveDefectFromModal();
-              }}
-            >
-              <label htmlFor="defect-title">Title <span aria-hidden="true">*</span></label>
-              <input id="defect-title" value={defectFormTitle} onChange={(event) => setDefectFormTitle(event.target.value)} required maxLength={200} placeholder="Brief summary of the issue" />
-              <label htmlFor="defect-description">Description</label>
-              <textarea id="defect-description" value={defectFormDescription} onChange={(event) => setDefectFormDescription(event.target.value)} rows={4} maxLength={4000} placeholder="Steps to reproduce, expected vs actual behavior, logs, or error messages..." />
-              <div className="credential-grid">
-                <label className="capture-label" htmlFor="defect-priority">Priority
-                  <select id="defect-priority" value={defectFormPriority} onChange={(event) => setDefectFormPriority(event.target.value)}>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </label>
-                <label className="capture-label" htmlFor="defect-severity">Severity
-                  <select id="defect-severity" value={defectFormSeverity} onChange={(event) => setDefectFormSeverity(event.target.value)}>
-                    <option value="critical">Critical</option>
-                    <option value="major">Major</option>
-                    <option value="minor">Minor</option>
-                  </select>
-                </label>
-                <label className="capture-label" htmlFor="defect-status">Status
-                  <select id="defect-status" value={defectFormStatus} onChange={(event) => setDefectFormStatus(event.target.value)}>
-                    <option value="open">Open</option>
-                    <option value="in progress">In progress</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </label>
-                <label className="capture-label" htmlFor="defect-application">Application
-                  <select id="defect-application" value={defectFormApplicationId ? String(defectFormApplicationId) : ""} onChange={(event) => setDefectFormApplicationId(event.target.value ? Number(event.target.value) : null)}>
-                    <option value="">Unlinked</option>
-                    {apps.map((item) => <option key={`defect-app-${item.id}`} value={item.id}>{item.name}</option>)}
-                  </select>
-                </label>
-              </div>
-              {defectFormError && <p className="form-error">{defectFormError}</p>}
-              <div className="projects-modal-actions">
-                <button type="button" className="secondary" onClick={() => closeDefectModal(false)} disabled={savingDefect}>Cancel</button>
-                <button type="submit" className="primary" disabled={savingDefect}>{savingDefect ? "Saving..." : defectModalMode === "create" ? "Report defect" : "Save changes"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 
@@ -9229,15 +9032,235 @@ Example (Markdown Table):
       {execution}
     </>
   );
+
+  const projectModalNode = projectModalMode && (
+    <div
+      className="projects-modal-overlay"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !projectFormName.trim() && !projectFormDescription.trim()) {
+          closeProjectModal();
+        }
+      }}
+    >
+      <div
+        className="panel projects-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="project-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="projects-modal-head">
+          <div>
+            <h3 id="project-modal-title">{projectModalMode === "create" ? "New project setup" : "Update project details"}</h3>
+          </div>
+          <button type="button" className="secondary btn-sm" onClick={closeProjectModal} aria-label="Close project modal">Close</button>
+        </div>
+        <p className="muted">Define the project context to keep applications, runs, and quality metrics organized.</p>
+        <form
+          className="projects-modal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveProjectFromModal();
+          }}
+        >
+          <label htmlFor="project-name">
+            Project name <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="project-name"
+            value={projectFormName}
+            onChange={(event) => {
+              setProjectFormName(event.target.value);
+              if (projectFormError) setProjectFormError("");
+            }}
+            placeholder="Example: Checkout Reliability"
+            required
+          />
+          <label htmlFor="project-description">Description</label>
+          <textarea
+            id="project-description"
+            value={projectFormDescription}
+            onChange={(event) => setProjectFormDescription(event.target.value)}
+            placeholder="Summarize scope, ownership, and quality goals."
+          />
+          <label htmlFor="project-lifecycle">Lifecycle</label>
+          <select
+            id="project-lifecycle"
+            value={projectFormLifecycle}
+            onChange={(event) => setProjectFormLifecycle(event.target.value as ProjectLifecycle)}
+          >
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="archived">Archived</option>
+          </select>
+          {projectFormError && <p className="form-error">{projectFormError}</p>}
+          <div className="projects-modal-actions">
+            <button type="button" className="secondary" onClick={closeProjectModal} disabled={savingProject}>Cancel</button>
+            <button type="submit" className="primary" disabled={savingProject}>{savingProject ? "Saving..." : projectModalMode === "create" ? "Create project" : "Save changes"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  const applicationModalNode = applicationEditingId !== null && (
+    <div
+      className="projects-modal-overlay"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !applicationFormName.trim() && !applicationFormTarget.trim()) {
+          closeApplicationEditModal();
+        }
+      }}
+    >
+      <div
+        className="panel projects-modal applications-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="application-edit-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="projects-modal-head">
+          <div>
+            <h3 id="application-edit-modal-title">Update target and name</h3>
+          </div>
+          <button type="button" className="secondary btn-sm" onClick={closeApplicationEditModal} aria-label="Close application edit modal">
+            Close
+          </button>
+        </div>
+        <p className="muted">Keep application details current so AI discovery and execution run against the correct target.</p>
+        <form
+          className="projects-modal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveApplicationFromModal();
+          }}
+        >
+          <label htmlFor="application-edit-name">
+            Application name <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="application-edit-name"
+            value={applicationFormName}
+            onChange={(event) => {
+              setApplicationFormName(event.target.value);
+              setApplicationFormError("");
+            }}
+            placeholder="e.g. Customer Portal"
+          />
+          <label htmlFor="application-edit-platform">Platform</label>
+          <input id="application-edit-platform" value={formatPlatformLabel(applicationFormPlatform)} disabled />
+          <label htmlFor="application-edit-target">
+            {applicationFormPlatform === "web" ? "Target URL" : "Package path"} <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="application-edit-target"
+            value={applicationFormTarget}
+            onChange={(event) => {
+              setApplicationFormTarget(event.target.value);
+              setApplicationFormError("");
+            }}
+            placeholder={applicationFormPlatform === "web" ? "https://your-app.example.com" : "uploads/application-build.apk"}
+          />
+          {applicationFormError && <p className="form-error">{applicationFormError}</p>}
+          <div className="projects-modal-actions">
+            <button type="button" className="secondary" onClick={closeApplicationEditModal} disabled={savingApplicationEdit}>
+              Cancel
+            </button>
+            <button type="submit" className="primary" disabled={savingApplicationEdit}>
+              {savingApplicationEdit ? "Saving..." : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  const defectModalNode = defectModalMode && (
+    <div
+      className="projects-modal-overlay"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !defectFormTitle.trim() && !defectFormDescription.trim()) {
+          closeDefectModal(false);
+        }
+      }}
+    >
+      <div
+        className="panel projects-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="defect-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="projects-modal-head">
+          <div>
+            <h3 id="defect-modal-title">{defectModalMode === "create" ? "Capture a quality issue" : "Update defect details"}</h3>
+          </div>
+          <button type="button" className="secondary btn-sm" onClick={() => closeDefectModal(false)} disabled={savingDefect}>Close</button>
+        </div>
+        <form
+          className="projects-modal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveDefectFromModal();
+          }}
+        >
+          <label htmlFor="defect-title">Title <span aria-hidden="true">*</span></label>
+          <input id="defect-title" value={defectFormTitle} onChange={(event) => setDefectFormTitle(event.target.value)} required maxLength={200} placeholder="Brief summary of the issue" />
+          <label htmlFor="defect-description">Description</label>
+          <textarea id="defect-description" value={defectFormDescription} onChange={(event) => setDefectFormDescription(event.target.value)} rows={4} maxLength={4000} placeholder="Steps to reproduce, expected vs actual behavior, logs, or error messages..." />
+          <div className="credential-grid">
+            <label className="capture-label" htmlFor="defect-priority">Priority
+              <select id="defect-priority" value={defectFormPriority} onChange={(event) => setDefectFormPriority(event.target.value)}>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label className="capture-label" htmlFor="defect-severity">Severity
+              <select id="defect-severity" value={defectFormSeverity} onChange={(event) => setDefectFormSeverity(event.target.value)}>
+                <option value="critical">Critical</option>
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+              </select>
+            </label>
+            <label className="capture-label" htmlFor="defect-status">Status
+              <select id="defect-status" value={defectFormStatus} onChange={(event) => setDefectFormStatus(event.target.value)}>
+                <option value="open">Open</option>
+                <option value="in progress">In progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+            </label>
+            <label className="capture-label" htmlFor="defect-application">Application
+              <select id="defect-application" value={defectFormApplicationId ? String(defectFormApplicationId) : ""} onChange={(event) => setDefectFormApplicationId(event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Unlinked</option>
+                {apps.map((item) => <option key={`defect-app-${item.id}`} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {defectFormError && <p className="form-error">{defectFormError}</p>}
+          <div className="projects-modal-actions">
+            <button type="button" className="secondary" onClick={() => closeDefectModal(false)} disabled={savingDefect}>Cancel</button>
+            <button type="submit" className="primary" disabled={savingDefect}>{savingDefect ? "Saving..." : defectModalMode === "create" ? "Report defect" : "Save changes"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
   const views: SectionViewsMap = {
     dashboard,
-    projects: dashboard,
-    applications: dashboard,
-    cases: executionWithResult,
+    projects,
+    applications: applicationView,
+    cases,
     execution: executionWithResult,
-    suites: executionWithResult,
+    suites: suitesView,
     runHistory,
-    evidence: runHistory,
+    evidence: evidenceView,
     defects: defectView,
     reports: reportsView,
     aiGenerator: aiGeneratorView,
@@ -9268,6 +9291,8 @@ Example (Markdown Table):
       projects={projectCatalog}
       selectedProjectId={selectedProjectId}
       onSelectProject={(projectId) => setSelectedProjectId(projectId)}
+      onCreateProject={openCreateProjectModal}
+      onCreateApplication={() => navigateToSection("applications")}
       mobileNavOpen={mobileNavOpen}
       navigationGroups={navSections}
       toast={toast}
@@ -9278,6 +9303,12 @@ Example (Markdown Table):
       onNotify={notify}
     >
       {views[section]}
+
+      {projectModalNode}
+
+      {applicationModalNode}
+
+      {defectModalNode}
 
       {activeBuildReportModal && (
         <div

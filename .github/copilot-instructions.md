@@ -41,6 +41,16 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
 - Ground all conventions and contracts in `.github/copilot-instructions.md` so that future agent sessions stay aligned with existing patterns and never hallucinate deprecated, assumed, or non-existent interfaces.
 - Ensure every commit message adheres to the version prefix rule (`vX.Y.Z: <type>(<scope>): <description>`).
 
+## Zero regression & functionality preservation policy
+
+> [!IMPORTANT]
+> **NEVER BREAK EXISTING FUNCTIONALITY WHEN ENHANCING OR REFACTORING**:
+> 1. **Preserve All Capabilities**: It is completely acceptable and encouraged to enhance, style, optimize, modernize, and compact layouts. However, existing functionality, data flows, CRUD capabilities (adding/editing/deleting projects, registering/editing applications, creating/editing test cases, organizing suites, executing tests, inspecting runs, viewing evidence, and reporting/updating defects) MUST REMAIN 100% OPERATIONAL.
+> 2. **Never Collapse Functional Views**: NEVER suppress, bypass, or collapse dedicated functional views (`projects`, `applications`, `cases`, `suites`, `evidence`) into fallbacks or redirects (`views.projects: dashboard`, `views.applications: dashboard`, etc.). Every section MUST render its dedicated, fully functional surface component.
+> 3. **Modal & Action Accessibility**: Action triggers and modals (e.g. `+ New Project`, `+ Add App`, `Log Defect`, edit forms) must remain directly accessible, visible, and fully functional across both dedicated views and global context bars. Modals that can be triggered from anywhere must be mounted at the shell level so they open seamlessly regardless of active view.
+> 4. **Bidirectional Route Mapping**: Route mappings (`pathSections`) and reverse paths (`sectionPaths`) must faithfully route each URL (`/projects`, `/applications`, `/test-cases`, `/test-suites`, `/evidence`) to its corresponding section, never collapsing them into `dashboard` or `execution`.
+> 5. **Pre-flight CRUD Verification**: Always verify that adding and managing projects and applications work end-to-end before shipping any changes.
+
 ## Current project contracts
 
 - Treat `docs/` as the canonical documentation tree. Do not recreate the removed root `doc/` tree.
@@ -68,9 +78,10 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - Frontend: Next.js on `http://localhost:3000` (`npm run dev` from `frontend/`).
   - Health & Metrics Endpoints: `GET /api/v1/observability/health` (publicly accessible deep health probe, no auth required) and `GET /api/v1/observability/metrics` (authenticated metrics).
 - UI Navigation & Architecture:
-  - Core navigation is consolidated into focused product pillars: `dashboard`, `aiGenerator`, `systemMap`, `execution`, `runHistory`, `defects`, `reports`, and `settings` (with embedded audit logs and AI settings).
-  - Audit logs are maintained as a dedicated tab inside `SettingsStudio.tsx` (`"ai" | "integrations" | "execution" | "security" | "audit"`), removing sidebar clutter while retaining `/audit` route resolution to Settings Studio.
-  - Legacy routes (`/projects`, `/applications`, `/test-cases`, `/test-suites`, `/evidence`, `/mapping`) resolve to their primary pillar sections to avoid empty wrapper pages.
+  - SkyWatch delivers full-featured, dedicated product surfaces for `dashboard`, `projects`, `applications`, `cases` (Test Cases repository), `suites` (Test Suites), `aiGenerator` (Scenario Generator), `systemMap` (Traceability Map), `execution` (Execute Tests), `runHistory` (Run History), `evidence` (Evidence Gallery), `defects` (Defect Tracking), `reports` (Reports & Analytics), and `settings` (with embedded AI settings, integrations, and audit logs).
+  - Every route (`/`, `/projects`, `/applications`, `/test-cases`, `/test-suites`, `/test-execution`, `/run-history`, `/evidence`, `/defects`, `/reports`, `/ai-generator`, `/agents`, `/system-map`, `/settings`, `/audit`) resolves to its corresponding functional workspace view.
+  - Quick action triggers for creating projects (`+ Project`) and adding applications (`+ App`) are readily accessible from the header hierarchy bar and dashboard action row.
+  - Audit logs are maintained as a dedicated tab inside `SettingsStudio.tsx` (`"ai" | "integrations" | "execution" | "security" | "audit"`), while retaining direct `/audit` route resolution to Settings Studio.
 - Build Report Parity & Canonical Backend Synchronization:
   - Post-execution build reports MUST query `GET /api/v1/execution/builds/{build_id}/detail` upon batch completion. Do not display diverged client-synthesized reports.
   - Build ID display across `CompleteBuildReportPanel` and `RunHistoryWorkspace` must strictly use `report.buildName` or 6-character uppercase hex slicing (`Build #${build_id.slice(-6).toUpperCase()}`).

@@ -23,6 +23,8 @@ type WorkspaceShellProps = {
   projects?: WorkspaceProject[];
   selectedProjectId?: string;
   onSelectProject?: (projectId: string) => void;
+  onCreateProject?: () => void;
+  onCreateApplication?: () => void;
   mobileNavOpen: boolean;
   navigationGroups: NavigationGroup[];
   toast?: string;
@@ -42,6 +44,8 @@ export default function WorkspaceShell({
   projects = [],
   selectedProjectId,
   onSelectProject,
+  onCreateProject,
+  onCreateApplication,
   mobileNavOpen,
   navigationGroups,
   toast,
@@ -131,39 +135,83 @@ export default function WorkspaceShell({
 
           {/* Desktop Dual Hierarchy Bar (Project -> Application -> Section) */}
           <div className="header-hierarchy-bar">
-            {projects.length > 0 && (
-              <label className="header-hierarchy-item" htmlFor="header-project-selector" title="Active QA Project Scope">
-                <span className="hierarchy-icon" aria-hidden="true">📁</span>
-                <span className="hierarchy-label">Project</span>
-                <select
-                  id="header-project-selector"
-                  value={selectedProjectId ?? projects[0]?.id ?? ""}
-                  onChange={(event) => onSelectProject?.(event.target.value)}
-                >
-                  {projects.map((p) => (
-                    <option key={`header-proj-${p.id}`} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </label>
-            )}
+            {projects.length > 0 ? (
+              <div className="header-hierarchy-group">
+                <label className="header-hierarchy-item" htmlFor="header-project-selector" title="Active QA Project Scope">
+                  <span className="hierarchy-icon" aria-hidden="true">📁</span>
+                  <span className="hierarchy-label">Project</span>
+                  <select
+                    id="header-project-selector"
+                    value={selectedProjectId ?? projects[0]?.id ?? ""}
+                    onChange={(event) => onSelectProject?.(event.target.value)}
+                  >
+                    {projects.map((p) => (
+                      <option key={`header-proj-${p.id}`} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {onCreateProject && (
+                  <button
+                    type="button"
+                    className="hierarchy-action-btn"
+                    onClick={onCreateProject}
+                    title="Create new project"
+                    aria-label="Create new project"
+                  >
+                    +
+                  </button>
+                )}
+              </div>
+            ) : onCreateProject ? (
+              <button
+                type="button"
+                className="hierarchy-action-btn-pill"
+                onClick={onCreateProject}
+                title="Create new project"
+              >
+                + Project
+              </button>
+            ) : null}
 
             <span className="header-hierarchy-sep" aria-hidden="true">›</span>
 
-            {apps.length > 0 && (
-              <label className="header-hierarchy-item" htmlFor="header-application-selector" title="Active Target Application Scope">
-                <span className="hierarchy-icon" aria-hidden="true">💻</span>
-                <span className="hierarchy-label">App</span>
-                <select
-                  id="header-application-selector"
-                  value={selectedApplication?.name ?? ""}
-                  onChange={(event) => onSelectApplication(event.target.value)}
-                >
-                  {apps.map((item) => (
-                    <option key={`header-app-${item.id}`} value={item.name}>{item.name}</option>
-                  ))}
-                </select>
-              </label>
-            )}
+            {apps.length > 0 ? (
+              <div className="header-hierarchy-group">
+                <label className="header-hierarchy-item" htmlFor="header-application-selector" title="Active Target Application Scope">
+                  <span className="hierarchy-icon" aria-hidden="true">💻</span>
+                  <span className="hierarchy-label">App</span>
+                  <select
+                    id="header-application-selector"
+                    value={selectedApplication?.name ?? ""}
+                    onChange={(event) => onSelectApplication(event.target.value)}
+                  >
+                    {apps.map((item) => (
+                      <option key={`header-app-${item.id}`} value={item.name}>{item.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {onCreateApplication && (
+                  <button
+                    type="button"
+                    className="hierarchy-action-btn"
+                    onClick={onCreateApplication}
+                    title="Add target application"
+                    aria-label="Add target application"
+                  >
+                    +
+                  </button>
+                )}
+              </div>
+            ) : onCreateApplication ? (
+              <button
+                type="button"
+                className="hierarchy-action-btn-pill"
+                onClick={onCreateApplication}
+                title="Add target application"
+              >
+                + App
+              </button>
+            ) : null}
 
             <span className="header-hierarchy-sep" aria-hidden="true">›</span>
 

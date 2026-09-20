@@ -2,10 +2,15 @@ import type { AppIconName, Section } from "../../types";
 
 export const navigationItems: Array<{ id: Section; label: string; icon: AppIconName }> = [
   { id: "dashboard", label: "Dashboard", icon: "overview" },
+  { id: "projects", label: "Projects", icon: "projects" },
+  { id: "applications", label: "Applications", icon: "applications" },
+  { id: "cases", label: "Test Cases", icon: "cases" },
+  { id: "suites", label: "Test Suites", icon: "suites" },
   { id: "aiGenerator", label: "Scenario Generator", icon: "ai" },
   { id: "systemMap", label: "Traceability Map", icon: "map" },
   { id: "execution", label: "Execute Tests", icon: "execution" },
   { id: "runHistory", label: "Run History", icon: "execution" },
+  { id: "evidence", label: "Evidence Gallery", icon: "overview" },
   { id: "agents", label: "AI Recommendations", icon: "recommendations" },
   { id: "defects", label: "Defects", icon: "defects" },
   { id: "reports", label: "Reports & Analytics", icon: "reports" },
@@ -13,10 +18,10 @@ export const navigationItems: Array<{ id: Section; label: string; icon: AppIconN
 ];
 
 export const navigationGroups = [
-  { id: "overview", label: "Overview", sections: ["dashboard"] as Section[] },
-  { id: "ai-workspace", label: "AI Workspace", sections: ["aiGenerator", "systemMap", "agents"] as Section[] },
-  { id: "test-execution", label: "Test Execution", sections: ["execution", "runHistory"] as Section[] },
-  { id: "reporting", label: "Reporting & Analytics", sections: ["defects", "reports"] as Section[] },
+  { id: "workspace", label: "Workspace Scope", sections: ["dashboard", "projects", "applications"] as Section[] },
+  { id: "ai-workspace", label: "AI QA Studio", sections: ["aiGenerator", "systemMap", "agents"] as Section[] },
+  { id: "quality", label: "Test Management", sections: ["cases", "suites", "execution", "runHistory", "evidence"] as Section[] },
+  { id: "reporting", label: "Reporting & Quality", sections: ["defects", "reports"] as Section[] },
   { id: "administration", label: "Administration", sections: ["settings"] as Section[] },
 ];
 
@@ -42,19 +47,19 @@ export const sectionPaths: Record<Section, string> = {
 export const pathSections: Record<string, Section> = {
   "/": "dashboard",
   "/dashboard": "dashboard",
-  "/projects": "dashboard",
-  "/applications": "dashboard",
-  "/test-cases": "execution",
+  "/projects": "projects",
+  "/applications": "applications",
+  "/test-cases": "cases",
   "/test-execution": "execution",
   "/run-history": "runHistory",
   "/defects": "defects",
-  "/test-suites": "execution",
+  "/test-suites": "suites",
   "/reports": "reports",
   "/ai-generator": "aiGenerator",
   "/agents": "agents",
   "/system-map": "systemMap",
   "/mapping": "systemMap",
-  "/evidence": "runHistory",
+  "/evidence": "evidence",
   "/settings": "settings",
   "/audit": "audit",
 };

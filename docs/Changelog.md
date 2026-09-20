@@ -1,6 +1,17 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.3.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.3.1`.
+
+## [2.3.1] - 2026-09-19
+
+### Fixed
+- **Projects & Applications View Routing & Creation Triggers**:
+  - Restored proper section views mapping in `frontend/src/app/page.tsx`: mapped `projects` to the dedicated `projects` workspace view and `applications` to `applicationView` (containing `ApplicationCapture`).
+  - Restored dedicated routing for `cases` (`test-cases`), `suites` (`test-suites`), and `evidence` (`evidence`) so all QA management surfaces render their dedicated components rather than fallback views.
+  - Extracted `projectModalMode`, `applicationEditingId`, and `defectModalMode` modals to top-level shell mounting so creating/editing projects, updating applications, and reporting defects are globally accessible from any view.
+  - Added quick `+ New` / `+ Project` and `+ Add App` action triggers in the desktop header hierarchy bar and Dashboard executive action strip for immediate 1-click project and app creation.
+  - Added unit test suite `frontend/src/components/navigation/navigationConfig.test.ts` validating bidirectional route mapping and section preservation.
+  - Updated `.github/copilot-instructions.md` with explicit **Zero Regression & Functionality Preservation** policies ensuring existing features, view mappings, and CRUD operations are never suppressed or broken during enhancements.
 
 ## [2.3.0] - 2026-09-19
 
