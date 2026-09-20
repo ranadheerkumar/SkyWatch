@@ -278,6 +278,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 client_ip, path, group,
             )
 
+            req_origin = request.headers.get("origin", "*")
             return JSONResponse(
                 status_code=429,
                 content={
@@ -290,6 +291,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "X-RateLimit-Limit": str(bucket.burst if bucket else 0),
                     "X-RateLimit-Remaining": str(bucket.remaining if bucket else 0),
                     "X-RateLimit-Reset": str(retry_after),
+                    "Access-Control-Allow-Origin": req_origin,
+                    "Access-Control-Allow-Credentials": "true",
                 },
             )
 

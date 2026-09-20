@@ -4195,10 +4195,10 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
       let activeConfig = aiConfigState;
       appendAiLog("step", `🔌 Checking backend API connectivity at ${API_URL}...`);
       try {
-        await apiFetch<{ status: string }>("/health", { retries: 4, timeoutMs: 10_000 }, token);
+        await apiFetch<{ status: string }>("/health", { retries: 4, timeoutMs: 30_000 }, token);
       } catch (error) {
         const detail = error instanceof Error ? error.message : "The backend did not respond.";
-        throw new Error(`Backend API is unavailable at ${API_URL}. Start the backend on port 8000 and try again. ${detail}`);
+        throw new Error(`Backend API is unavailable. Start the backend on port 8000 and try again. ${detail}`);
       }
       appendAiLog("success", "✅ Backend API is reachable.");
 
@@ -4219,6 +4219,7 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
             model: activeConfig.model,
             endpoint: activeConfig.endpoint,
           }),
+          timeoutMs: 60_000,
         },
         token,
       );

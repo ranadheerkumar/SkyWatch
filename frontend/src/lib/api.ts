@@ -1,7 +1,11 @@
 import { AUTH_EXPIRED_EVENT, clearAuthToken } from "./auth";
 import { formatDuration } from "./formatDuration";
 import { logger } from "./logger";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+function resolveBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+}
+
+const API_BASE_URL = resolveBaseUrl();
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_READ_RETRIES = 3;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -12,6 +16,9 @@ function getAlternativeUrl(url: string): string | null {
   }
   if (url.includes("localhost:8000")) {
     return url.replace("localhost:8000", "127.0.0.1:8000");
+  }
+  if (typeof window !== "undefined" && url.includes(":8000/")) {
+    return url.replace(/https?:\/\/[^/]+:8000/, "");
   }
   return null;
 }
@@ -187,7 +194,8 @@ export async function apiFetchWithMeta<T>(path: string, options: ApiRequestOptio
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const url = `${API_BASE_URL}${path}`;
+  const baseUrl = resolveBaseUrl();
+  const url = `${baseUrl}${path}`;
   const response = await fetchWithPolicy(url, options, headers);
 
   const contentType = response.headers.get("content-type") ?? "";

@@ -81,9 +81,9 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
 	CORSMiddleware,
-	allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0):\d+",
+	allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?",
 	allow_credentials=True,
-	allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
+	allow_methods=["*"],
 	allow_headers=["*"],
 	expose_headers=[
 		"X-SkyWatch-AI-Generation-Mode",
@@ -116,6 +116,8 @@ async def security_headers_middleware(request: Request, call_next):
 	response.headers["X-Frame-Options"] = "DENY"
 	response.headers["X-XSS-Protection"] = "1; mode=block"
 	response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+	if request.headers.get("access-control-request-private-network") == "true":
+		response.headers["Access-Control-Allow-Private-Network"] = "true"
 	return response
 
 
