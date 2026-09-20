@@ -60,6 +60,23 @@ class AgenticPlan:
         }
 
 
+@dataclass
+class AgenticProviderSelection:
+    """Agentic decision structure for dynamic execution provider and environment selection."""
+    selected_provider_id: str
+    provider_name: str
+    rationale: str
+    recommended_browser: str
+    recommended_platform: str
+    is_cloud_grid: bool
+    fallback_provider_id: str = "local"
+    capabilities_matched: list[str] = field(default_factory=list)
+    provider_config: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class CapabilityOrchestrator:
     """Agent orchestrator that plans and executes based on dynamically discovered capabilities."""
 
@@ -177,6 +194,28 @@ class CapabilityOrchestrator:
                 tools_selected.append(tool.tool_id)
                 step_idx += 1
 
+        # Check if test execution is requested
+        if "run" in lowered_obj or "execute" in lowered_obj or "verify" in lowered_obj:
+            exec_tools = self._tools.list_tools(capability=PlatformCapability.TEST_EXECUTION, available_only=True)
+            if exec_tools:
+                provider_selection = self.select_execution_provider(objective, target=ctx, requested_provider=ctx.get("provider"))
+                tool = exec_tools[0]
+                steps.append(
+                    AgenticPlanStep(
+                        step_id=f"step-{step_idx}",
+                        goal=f"Execute tests dynamically via {provider_selection.provider_name} ({provider_selection.rationale})",
+                        capability=PlatformCapability.TEST_EXECUTION.value,
+                        tool_id=tool.tool_id,
+                        arguments={
+                            "url": ctx.get("target_url", "https://example.com"),
+                            "provider": provider_selection.selected_provider_id,
+                            "browser": provider_selection.recommended_browser,
+                        },
+                    )
+                )
+                tools_selected.append(tool.tool_id)
+                step_idx += 1
+
         # Always include Quality Intelligence / Reporting as final step
         report_tools = self._tools.list_tools(capability=PlatformCapability.REPORTING, available_only=True)
         if report_tools:
@@ -199,6 +238,113 @@ class CapabilityOrchestrator:
             capabilities_discovered=discovered_cap_names,
             tools_selected=list(dict.fromkeys(tools_selected)),
             steps=steps,
+        )
+
+    def select_execution_provider(
+        self,
+        objective: str,
+        target: dict[str, Any] | None = None,
+        requested_provider: str | None = None,
+    ) -> AgenticProviderSelection:
+        """
+        Agentic reasoning engine that evaluates testing goals, device requirements,
+        cloud availability, and execution context to dynamically assign the optimal provider.
+        Always maintains a guaranteed zero-regression fallback to LocalExecutionProvider.
+        """
+        from app.services.execution_providers.registry import execution_registry
+
+        ctx = target or {}
+        lowered = f"{objective} {ctx.get('browser', '')} {ctx.get('platform', '')} {ctx.get('device', '')}".casefold()
+
+        # 1. If explicitly requested by user or policy, verify and assign
+        if requested_provider:
+            clean_req = requested_provider.strip().lower()
+            prov = execution_registry.get(clean_req)
+            if prov and (clean_req == "local" or prov.is_configured()):
+                return AgenticProviderSelection(
+                    selected_provider_id=prov.provider_id,
+                    provider_name=prov.name,
+                    rationale=f"Directly requested provider '{prov.name}' assigned by user/pipeline configuration.",
+                    recommended_browser=ctx.get("browser", "chromium"),
+                    recommended_platform=ctx.get("platform", "web"),
+                    is_cloud_grid=clean_req in ("sauce_labs", "lambdatest"),
+                    capabilities_matched=[c.value for c in prov.get_capabilities().supported_platforms],
+                )
+
+        # 2. Real Mobile / iOS / iPad / Android reasoning
+        is_mobile_req = any(kw in lowered for kw in ("mobile", "ios", "iphone", "ipad", "android", "galaxy", "real device"))
+        if is_mobile_req:
+            lt = execution_registry.get("lambdatest")
+            if lt and lt.is_configured():
+                return AgenticProviderSelection(
+                    selected_provider_id="lambdatest",
+                    provider_name=lt.name,
+                    rationale="Selected LambdaTest Smart Automation Grid for real mobile device testing and cross-browser cloud matrix.",
+                    recommended_browser=ctx.get("browser", "chromium"),
+                    recommended_platform="mobile",
+                    is_cloud_grid=True,
+                    capabilities_matched=["MOBILE_AUTOMATION", "REAL_DEVICES", "VIDEO_RECORDING"],
+                    provider_config={"device_name": ctx.get("device", "iPhone 15"), "is_real_mobile": True},
+                )
+            sauce = execution_registry.get("sauce_labs")
+            if sauce and sauce.is_configured():
+                return AgenticProviderSelection(
+                    selected_provider_id="sauce_labs",
+                    provider_name=sauce.name,
+                    rationale="Selected Sauce Labs Cloud Grid for real iOS/Android device farm execution.",
+                    recommended_browser=ctx.get("browser", "chromium"),
+                    recommended_platform="mobile",
+                    is_cloud_grid=True,
+                    capabilities_matched=["MOBILE_AUTOMATION", "REAL_DEVICES", "SAUCE_TUNNEL"],
+                    provider_config={"device_name": ctx.get("device", "iPhone 14")},
+                )
+            # Safe local fallback with emulation
+            local = execution_registry.get("local")
+            return AgenticProviderSelection(
+                selected_provider_id="local",
+                provider_name=local.name,
+                rationale="Real device cloud credentials not configured. Gracefully falling back to Local Playwright Runner with responsive viewport emulation.",
+                recommended_browser=ctx.get("browser", "chromium"),
+                recommended_platform="web",
+                is_cloud_grid=False,
+                fallback_provider_id="local",
+                capabilities_matched=["EMULATED_MOBILE", "LOCAL_VIEWPORT"],
+                provider_config={"emulate_mobile": True},
+            )
+
+        # 3. Cloud Container / Isolation reasoning
+        if any(kw in lowered for kw in ("container", "docker", "isolated", "headless cluster")):
+            for pid in ("docker", "azure", "gcp", "aws"):
+                prov = execution_registry.get(pid)
+                if prov and prov.is_configured():
+                    return AgenticProviderSelection(
+                        selected_provider_id=prov.provider_id,
+                        provider_name=prov.name,
+                        rationale=f"Selected {prov.name} for ephemeral containerized test execution.",
+                        recommended_browser=ctx.get("browser", "chromium"),
+                        recommended_platform="web",
+                        is_cloud_grid=pid in ("azure", "gcp", "aws"),
+                        capabilities_matched=["CONTAINER_EXECUTION", "PARALLEL_RUNNER"],
+                    )
+
+        # 4. Cross-browser matrix reasoning (e.g. WebKit / Safari or Firefox)
+        if "safari" in lowered or "webkit" in lowered:
+            browser_choice = "webkit"
+        elif "firefox" in lowered or "gecko" in lowered:
+            browser_choice = "firefox"
+        else:
+            browser_choice = ctx.get("browser", "chromium")
+
+        # 5. Default First-Class Local Execution
+        local = execution_registry.get("local")
+        return AgenticProviderSelection(
+            selected_provider_id="local",
+            provider_name=local.name,
+            rationale="Selected Local Playwright Runner for ultra-low latency, zero cloud dependency, live browser visibility, and AI self-healing.",
+            recommended_browser=browser_choice,
+            recommended_platform="web",
+            is_cloud_grid=False,
+            capabilities_matched=["LOCAL_PLAYWRIGHT", "DOM_INSPECTION", "AUDIO_VIDEO_NARRATION", "SELF_HEALING"],
         )
 
     async def execute_plan(self, plan: AgenticPlan) -> AgenticPlan:

@@ -208,7 +208,92 @@ export default function SettingsStudio({
     if (activeTab === "capabilities") {
       handleLoadCapabilities();
     }
+    if (activeTab === "execution") {
+      handleLoadProviders();
+    }
   }, [activeTab]);
+
+  // Multi-Environment Execution Providers State
+  const [providersData, setProvidersData] = useState<Array<{
+    provider_id: string;
+    name: string;
+    provider_type: string;
+    is_configured: boolean;
+    capabilities: {
+      description: string;
+      supported_browsers: string[];
+      supported_platforms: string[];
+      supported_devices?: string[];
+      supports_real_devices: boolean;
+      supports_live_video: boolean;
+      supports_tracing: boolean;
+      supports_tunnels: boolean;
+      max_concurrency: number;
+    };
+    health?: {
+      is_available: boolean;
+      status: string;
+      latency_ms?: number;
+      error_message?: string;
+    } | null;
+  }>>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
+  const [providerProbeResults, setProviderProbeResults] = useState<Record<string, any>>({});
+  const [execObjective, setExecObjective] = useState("Execute cross-browser test suite with real mobile iPad Safari verification");
+  const [agenticSelection, setAgenticSelection] = useState<any>(null);
+  const [selectingProvider, setSelectingProvider] = useState(false);
+
+  const handleLoadProviders = async () => {
+    setLoadingProviders(true);
+    try {
+      const res = await apiFetch<any[]>("/api/v1/execution/providers", {}, token || undefined);
+      setProvidersData(res || []);
+    } catch {
+      // Graceful fallback
+    } finally {
+      setLoadingProviders(false);
+    }
+  };
+
+  const handleTestProvider = async (providerId: string) => {
+    setTestingProviderId(providerId);
+    try {
+      const res = await apiFetch<any>(
+        `/api/v1/execution/providers/${providerId}/test-connection`,
+        { method: "POST" },
+        token || undefined
+      );
+      setProviderProbeResults((prev) => ({ ...prev, [providerId]: res }));
+    } catch (err) {
+      setProviderProbeResults((prev) => ({
+        ...prev,
+        [providerId]: { error: err instanceof Error ? err.message : "Connection failed" },
+      }));
+    } finally {
+      setTestingProviderId(null);
+    }
+  };
+
+  const handleAgenticSelect = async () => {
+    if (!execObjective.trim()) return;
+    setSelectingProvider(true);
+    try {
+      const res = await apiFetch<any>(
+        "/api/v1/execution/agentic-select",
+        {
+          method: "POST",
+          body: JSON.stringify({ objective: execObjective.trim() }),
+        },
+        token || undefined
+      );
+      setAgenticSelection(res);
+    } catch (err) {
+      setAgenticSelection({ error: err instanceof Error ? err.message : "Selection failed" });
+    } finally {
+      setSelectingProvider(false);
+    }
+  };
 
   const handleFetchGitRepos = async () => {
     if (!token) return;
@@ -1146,32 +1231,201 @@ export default function SettingsStudio({
         </div>
       )}
 
-      {/* Tab 3: Execution Defaults */}
+      {/* Tab 3: Multi-Environment Execution Providers & Cloud Grids */}
       {activeTab === "execution" && (
-        <div className="settings-studio-card">
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700 }}>Execution Engine Defaults</h2>
-          <p className="muted" style={{ margin: "4px 0 16px" }}>
-            Default Playwright execution parameters, worker concurrency, evidence capture, and self-healing policies.
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-            <div className="panel" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <strong>Execution Mode</strong>
-              <span className="muted" style={{ fontSize: "13px" }}>Default mode for test runs (Watch Live interactive stream vs Background batch queue).</span>
-              <span className="badge badge-secondary" style={{ width: "fit-content" }}>Watch Live / Parallel Workers</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-studio-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700 }}>Multi-Environment Execution Providers</h2>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  Orchestrate test runs dynamically across Local Playwright, Sauce Labs, LambdaTest, and Cloud Containers (Docker / Azure / GCP / AWS).
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleLoadProviders}
+                disabled={loadingProviders}
+              >
+                {loadingProviders ? "Refreshing..." : "Refresh Providers"}
+              </button>
             </div>
 
-            <div className="panel" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <strong>Evidence Retention</strong>
-              <span className="muted" style={{ fontSize: "13px" }}>Screenshots captured on every failed step; full video and Playwright trace on demand.</span>
-              <span className="badge badge-secondary" style={{ width: "fit-content" }}>Screenshots + Traces on Failure</span>
+            {/* Providers Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px", marginTop: "20px" }}>
+              {providersData.map((prov) => {
+                const probeRes = providerProbeResults[prov.provider_id];
+                const isTesting = testingProviderId === prov.provider_id;
+                const health = prov.health;
+
+                return (
+                  <div
+                    key={prov.provider_id}
+                    className="panel"
+                    style={{
+                      padding: "16px",
+                      borderRadius: "10px",
+                      border: prov.is_configured ? "1px solid rgba(59, 130, 246, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+                      background: "rgba(15, 23, 42, 0.6)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                        <div>
+                          <strong style={{ fontSize: "15px", color: "#f8fafc" }}>{prov.name}</strong>
+                          <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#60a5fa", marginTop: "2px" }}>
+                            {prov.provider_id} • {prov.provider_type.toUpperCase()}
+                          </div>
+                        </div>
+                        <span
+                          className={`badge ${
+                            prov.provider_id === "local"
+                              ? "badge-success"
+                              : prov.is_configured
+                              ? "badge-success"
+                              : "badge-secondary"
+                          }`}
+                          style={{ fontSize: "11px" }}
+                        >
+                          {prov.provider_id === "local" ? "Default Local" : prov.is_configured ? "Configured" : "Unconfigured"}
+                        </span>
+                      </div>
+
+                      <p className="muted" style={{ fontSize: "12px", margin: "10px 0", lineHeight: "1.4" }}>
+                        {prov.capabilities.description || "Execution provider adapter."}
+                      </p>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "8px 0" }}>
+                        {prov.capabilities.supported_browsers.map((b) => (
+                          <span key={b} className="badge badge-secondary" style={{ fontSize: "10px", padding: "2px 6px" }}>
+                            {b}
+                          </span>
+                        ))}
+                        {prov.capabilities.supports_real_devices && (
+                          <span className="badge badge-success" style={{ fontSize: "10px", padding: "2px 6px" }}>
+                            Real Devices
+                          </span>
+                        )}
+                        {prov.capabilities.supports_tunnels && (
+                          <span className="badge badge-info" style={{ fontSize: "10px", padding: "2px 6px" }}>
+                            Secure Tunnels
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "10px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <span className="muted" style={{ fontSize: "11px" }}>
+                          Max Concurrency: {prov.capabilities.max_concurrency}
+                        </span>
+                        {health?.latency_ms !== undefined && health.latency_ms !== null && (
+                          <span style={{ fontSize: "11px", color: "#10b981", fontFamily: "monospace" }}>
+                            {health.latency_ms} ms
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ width: "100%", fontSize: "12px", padding: "4px 8px" }}
+                        onClick={() => handleTestProvider(prov.provider_id)}
+                        disabled={isTesting}
+                      >
+                        {isTesting ? "Pinging..." : "Test Connection & Health"}
+                      </button>
+
+                      {probeRes && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            padding: "6px 8px",
+                            borderRadius: "6px",
+                            fontSize: "11px",
+                            fontFamily: "monospace",
+                            background: probeRes.error ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                            color: probeRes.error ? "#f87171" : "#34d399",
+                          }}
+                        >
+                          {probeRes.error
+                            ? `Probe failed: ${probeRes.error}`
+                            : `Probe healthy (${probeRes.health?.latency_ms ?? 0} ms) - ${probeRes.health?.status ?? "ok"}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Interactive Agentic Provider Selection */}
+          <div className="settings-studio-card">
+            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700 }}>Agentic Provider Selection Engine</h2>
+            <p className="muted" style={{ margin: "4px 0 16px" }}>
+              Enter a testing objective to have the orchestrator dynamically reason over device requirements, cloud grids, and fallback policies.
+            </p>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <input
+                type="text"
+                className="input-text"
+                style={{ flex: 1, minWidth: "300px" }}
+                value={execObjective}
+                onChange={(e) => setExecObjective(e.target.value)}
+                placeholder="e.g. Run cross-browser matrix across Chrome, Firefox, and iPad Safari"
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleAgenticSelect}
+                disabled={selectingProvider || !execObjective.trim()}
+              >
+                {selectingProvider ? "Analyzing..." : "Analyze & Select Provider"}
+              </button>
             </div>
 
-            <div className="panel" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <strong>Autonomous Self-Healing</strong>
-              <span className="muted" style={{ fontSize: "13px" }}>AI healer agent identifies broken locators in real time, applies repairs, and persists candidates.</span>
-              <span className="badge badge-secondary" style={{ width: "fit-content" }}>Active (Bounded Strict Mode)</span>
-            </div>
+            {agenticSelection && (
+              <div
+                className="panel"
+                style={{
+                  padding: "16px",
+                  borderRadius: "8px",
+                  background: "rgba(30, 41, 59, 0.7)",
+                  border: "1px solid rgba(99, 102, 241, 0.4)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <strong style={{ fontSize: "15px", color: "#818cf8" }}>
+                    Selected Provider: {agenticSelection.provider_name} ({agenticSelection.selected_provider_id})
+                  </strong>
+                  <span className={`badge ${agenticSelection.is_cloud_grid ? "badge-info" : "badge-success"}`}>
+                    {agenticSelection.is_cloud_grid ? "Cloud Grid" : "Local Runner"}
+                  </span>
+                </div>
+                <p style={{ margin: "6px 0", fontSize: "13px", color: "#e2e8f0" }}>{agenticSelection.rationale}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "12px", fontSize: "12px" }}>
+                  <div>
+                    <span className="muted">Recommended Browser: </span>
+                    <span style={{ fontWeight: 600, color: "#60a5fa" }}>{agenticSelection.recommended_browser}</span>
+                  </div>
+                  <div>
+                    <span className="muted">Platform: </span>
+                    <span style={{ fontWeight: 600, color: "#34d399" }}>{agenticSelection.recommended_platform}</span>
+                  </div>
+                  <div>
+                    <span className="muted">Fallback Provider: </span>
+                    <span style={{ fontWeight: 600 }}>{agenticSelection.fallback_provider_id}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

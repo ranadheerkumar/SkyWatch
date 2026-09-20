@@ -1,6 +1,29 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.5.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.6.0`.
+
+## [2.6.0] - 2026-09-20
+
+### Added
+- **Multi-Environment, Cloud-Neutral Execution Engine (`docs/MULTI_ENVIRONMENT_EXECUTION_ENGINE.md`)**:
+  - Implemented abstract `ExecutionProvider` interface establishing a single unified execution abstraction across Local, Remote Grids, and Cloud Containers with zero duplicate runner code.
+  - **First-Class Local Playwright Runner (`LocalExecutionProvider`)**: High-speed, zero-cloud execution across Chromium, Firefox, and WebKit with video/audio narration, DOM inspection, and AI self-healing. Strict zero-regression local guarantee.
+  - **Sauce Labs Cloud Grid Adapter (`SauceLabsExecutionProvider`)**: Remote CDP and W3C execution across real iOS/Android devices, US/EU datacenters, and Sauce Connect secure tunnels.
+  - **LambdaTest Smart Automation Grid Adapter (`LambdaTestExecutionProvider`)**: Cross-browser testing across 3000+ browser/OS combinations, real devices, SmartUI, and UnderTunnel.
+  - **Cloud Container Dispatcher (`CloudContainerExecutionProvider`)**: Ephemeral containerized test runners supporting Docker, Azure Container Apps / ACI, GCP Cloud Run Jobs, and AWS ECS Fargate.
+  - **Canonical Execution Contract (`CanonicalExecutionRequest`, `CanonicalExecutionResult`)**: Platform-neutral schemas normalizing execution inputs, step results, assertions, and artifact evidence across all providers.
+  - **Central Provider Registry (`ExecutionProviderRegistry`)**: Singleton registry supporting dynamic provider registration, capability advertising, and parallel health monitoring.
+  - **Dynamic Agentic Provider Selection (`CapabilityOrchestrator.select_execution_provider()`)**: Intelligent agentic decision engine that reasons over test objectives, real-device requirements (e.g. iPad Safari), and cloud availability to select optimal providers with automatic fallback to local emulation.
+  - **Standardized Execution Tool (`_MultiEnvironmentExecutionTool`)**: Registered under `tool.execution.dispatcher` in the Enterprise Tool Registry (`tool_registry.py`).
+  - **Execution API Endpoints (`app/api/v1/execution.py`)**: Added `GET /api/v1/execution/providers`, `POST /api/v1/execution/providers/{id}/test-connection`, and `POST /api/v1/execution/agentic-select`.
+- **Frontend Multi-Environment Execution Studio (`SettingsStudio.tsx`)**:
+  - Transformed the Execution Settings tab into an interactive Multi-Environment Execution Providers dashboard with live health/latency probes, configuration badges, and capability chips.
+  - Added interactive **Agentic Provider Selection Engine** prompt analyzer allowing QA engineers to submit test objectives and view orchestrator reasoning in real time.
+- **Comprehensive Automated Test Suites**:
+  - Added `backend/tests/test_execution_providers.py` (11 tests).
+  - Added `backend/tests/test_execution_contract.py` (2 contract tests).
+  - Added `backend/tests/test_agentic_provider_selection.py` (8 tests).
+  - All 62 backend unit tests and 24 frontend Vitest tests pass with 100% success.
 
 ## [2.5.0] - 2026-09-20
 

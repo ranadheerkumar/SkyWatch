@@ -180,6 +180,8 @@ class EnterpriseToolRegistry:
         self.register(_JiraIntegrationTool())
         # 8. qTest ALM Integration Tool
         self.register(_QTestIntegrationTool())
+        # 9. Multi-Environment Execution Tool
+        self.register(_MultiEnvironmentExecutionTool())
 
 
 # ==============================================================================
@@ -446,6 +448,59 @@ class _QTestIntegrationTool(EnterpriseTool):
             tool_id=self.descriptor.tool_id,
             success=True,
             data={"status": "synchronized", "action": arguments.get("action")},
+        )
+
+
+class _MultiEnvironmentExecutionTool(EnterpriseTool):
+    """Tool wrapping the Multi-Environment Execution Dispatcher across Local, Sauce Labs, LambdaTest, and Cloud Containers."""
+
+    @property
+    def descriptor(self) -> EnterpriseToolDescriptor:
+        return EnterpriseToolDescriptor(
+            tool_id="tool.execution.dispatcher",
+            name="Multi-Environment Execution Dispatcher",
+            description="Executes test runs across Local Playwright, Sauce Labs, LambdaTest, and Cloud Containers with agentic provider selection and artifact normalization.",
+            capability=PlatformCapability.TEST_EXECUTION,
+            version="1.0.0",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Target web or API URL"},
+                    "provider": {"type": "string", "description": "Target provider (local, sauce_labs, lambdatest, docker, azure, gcp, aws)"},
+                    "browser": {"type": "string", "enum": ["chromium", "firefox", "webkit", "chrome", "edge"]},
+                    "steps": {"type": "array"},
+                    "checks": {"type": "array"},
+                },
+                "required": ["url"],
+            },
+            permissions=["test:execute"],
+        )
+
+    async def execute(self, call_id: str = "", **arguments: Any) -> ToolExecutionResponse:
+        from app.services.execution_providers.registry import execution_registry
+        from app.schemas.canonical_execution import CanonicalExecutionRequest, BrowserType
+        import uuid
+
+        provider_id = arguments.get("provider", "local")
+        provider = execution_registry.get(provider_id)
+        run_id = f"run-tool-{uuid.uuid4().hex[:8]}"
+
+        raw_browser = arguments.get("browser", "chromium")
+        browser_enum = BrowserType(raw_browser) if raw_browser in [b.value for b in BrowserType] else BrowserType.CHROMIUM
+
+        req = CanonicalExecutionRequest(
+            run_id=run_id,
+            target_url=arguments.get("url", "https://example.com"),
+            browser=browser_enum,
+            steps=arguments.get("steps", []),
+            checks=arguments.get("checks", []),
+        )
+        res = await provider.execute(req)
+        return ToolExecutionResponse(
+            call_id=call_id,
+            tool_id=self.descriptor.tool_id,
+            success=res.status in ("passed", "completed"),
+            data=res.model_dump(),
         )
 
 

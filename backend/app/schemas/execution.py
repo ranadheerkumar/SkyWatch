@@ -43,6 +43,11 @@ class ExecutionRequest(BaseModel):
 	capture_audio: bool = True
 	voice_gender: Literal["male", "female"] = "male"
 	execution_mode: Literal["watch_live", "background"] = "watch_live"
+	execution_provider: str = Field(default="local", max_length=100)
+	browser: Literal["chromium", "firefox", "webkit", "chrome", "edge"] = "chromium"
+	target_platform: Literal["web", "mobile", "api", "desktop"] = "web"
+	device_name: str | None = Field(default=None, max_length=200)
+	provider_config: dict[str, Any] = Field(default_factory=dict)
 	headless: bool | None = Field(default=None)
 	slow_mode: Literal["normal", "demo", "showcase"] = "normal"
 	trace_mode: Literal["off", "on_failure", "always"] = "on_failure"
@@ -131,6 +136,10 @@ class ExecutionResponse(BaseModel):
 	error: str | None = None
 	healer_agent: str | None = None
 	healed_steps: list[dict[str, Any]] = Field(default_factory=list)
+	execution_provider: str = "local"
+	browser: str = "chromium"
+	remote_session_id: str | None = None
+	remote_dashboard_url: str | None = None
 
 
 class RunCreated(BaseModel):
@@ -213,6 +222,8 @@ class BatchExecutionRequest(BaseModel):
 	build_name: str | None = Field(default=None, max_length=200)
 	trigger_source: str = Field(default="manual", max_length=50)
 	execution_mode: Literal["watch_live", "background"] = "watch_live"
+	execution_provider: str = Field(default="local", max_length=100)
+	browser: Literal["chromium", "firefox", "webkit", "chrome", "edge"] = "chromium"
 	capture_screenshot: bool = True
 	capture_video: bool = True
 	capture_audio: bool = True

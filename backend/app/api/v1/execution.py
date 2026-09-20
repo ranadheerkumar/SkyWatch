@@ -1875,3 +1875,80 @@ def get_build_execution_detail(
         finished_at=build_finished_at,
         cases=case_items,
     )
+
+
+# ==============================================================================
+# Multi-Environment Execution Provider & Agentic Selection Endpoints
+# ==============================================================================
+
+@router.get("/providers", summary="List execution providers and capabilities")
+async def list_execution_providers(
+    user: User = Depends(current_user),
+):
+    """
+    Returns the catalog of registered execution providers (Local, Sauce Labs,
+    LambdaTest, Docker, Azure, GCP, AWS), including their capabilities, supported
+    browsers, and configuration status.
+    """
+    from app.services.execution_providers.registry import execution_registry
+    providers = execution_registry.list_all()
+    statuses = await execution_registry.check_all_health()
+    status_map = {s.provider_id: s for s in statuses}
+
+    result = []
+    for prov in providers:
+        caps = prov.get_capabilities()
+        health = status_map.get(prov.provider_id)
+        result.append({
+            "provider_id": prov.provider_id,
+            "name": prov.name,
+            "provider_type": prov.provider_type.value,
+            "is_configured": prov.is_configured(),
+            "capabilities": caps.model_dump(),
+            "health": health.model_dump() if health else None,
+        })
+    return result
+
+
+@router.post("/providers/{provider_id}/test-connection", summary="Test provider connectivity")
+async def test_provider_connection(
+    provider_id: str,
+    user: User = Depends(require_roles("admin", "manager", "engineer", "lead")),
+):
+    """
+    Triggers an on-demand health and connectivity probe for the specified provider.
+    """
+    from app.services.execution_providers.registry import execution_registry
+    prov = execution_registry.get(provider_id)
+    if not prov or prov.provider_id != provider_id.lower():
+        raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found.")
+    health = await prov.check_health()
+    return {
+        "provider_id": provider_id,
+        "name": prov.name,
+        "is_configured": prov.is_configured(),
+        "health": health.model_dump(),
+    }
+
+
+@router.post("/agentic-select", summary="Agentic execution provider selection")
+async def agentic_select_provider(
+    payload: dict = Body(...),
+    user: User = Depends(current_user),
+):
+    """
+    Agentic decision endpoint that reasons over testing objectives, browser matrices,
+    and target devices to recommend the optimal execution provider and platform.
+    """
+    from app.services.capability_orchestrator import default_capability_orchestrator
+    objective = payload.get("objective", "Execute test suite")
+    target = payload.get("target", {})
+    requested_provider = payload.get("provider")
+
+    selection = default_capability_orchestrator.select_execution_provider(
+        objective=objective,
+        target=target,
+        requested_provider=requested_provider,
+    )
+    return selection.to_dict()
+

@@ -189,4 +189,10 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - Universal Quality Model (`backend/app/schemas/universal_quality_model.py`): Canonical platform-neutral entities (`Organization`, `Team`, `Project`, `Application`, `Environment`, `Requirement`, `Test Plan`, `Test Suite`, `Test Case`, `Test Step`, `Test Data`, `Test Run`, `Test Execution`, `Defect`, `Evidence`, `Report`). External systems (Jira, qTest, Git) map into this model via Adapters.
   - Cloud-Neutral Architecture (`backend/app/services/cloud_providers/`): Object storage and secret management operate behind provider interfaces (`StorageProvider`, `SecretProvider`) supporting Local, Azure, GCP, and AWS with zero vendor lock-in in core business logic.
   - The Golden Rule: Before adding code, never ask "Where do I add this code?" Ask: "Is this already a capability SkyWatch should have, and can an existing agent, tool, service, adapter, or platform component perform it?" Reuse → Extend → Generalize → Consolidate → Create only if necessary.
+- Multi-Environment, Cloud-Neutral Execution Engine (`backend/app/services/execution_providers/` & `docs/MULTI_ENVIRONMENT_EXECUTION_ENGINE.md`):
+  - Local Execution is a First-Class Citizen: Zero cloud credentials required, 100% offline-ready, Playwright Chromium/Firefox/WebKit with evidence generation and AI self-healing. Strict zero-regression local guarantee.
+  - Canonical Execution Contract: `CanonicalExecutionRequest` and `CanonicalExecutionResult` normalize all test execution across Local, Sauce Labs, LambdaTest, Docker, Azure Container Apps, GCP Cloud Run, and AWS ECS Fargate.
+  - Dynamic Agentic Provider Selection: `CapabilityOrchestrator.select_execution_provider()` dynamically evaluates testing objectives, real-device requirements (e.g. iPad Safari), and cloud availability to assign optimal providers with automatic fallback to local emulation.
+  - Standardized Execution Dispatcher Tool: Registered under `tool.execution.dispatcher` in the enterprise tool registry with full artifact normalization.
+
 

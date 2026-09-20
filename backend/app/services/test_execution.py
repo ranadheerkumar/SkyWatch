@@ -2213,27 +2213,93 @@ async def execute_web_target(
     capture_screenshots = request.capture_screenshot or request.highlight_actions
 
     try:
+        provider_id = getattr(request, "execution_provider", "local").lower()
+        if provider_id not in ("local", ""):
+            from app.services.execution_providers.registry import execution_registry
+            from app.schemas.canonical_execution import CanonicalExecutionRequest, BrowserType, PlatformType
+            prov = execution_registry.get(provider_id)
+            if prov and prov.provider_id != "local":
+                await _emit_execution_event(event_callback, "STARTING", f"Dispatching execution to provider: {prov.name}")
+                raw_browser = getattr(request, "browser", "chromium")
+                browser_enum = BrowserType(raw_browser) if raw_browser in [b.value for b in BrowserType] else BrowserType.CHROMIUM
+                canonical_req = CanonicalExecutionRequest(
+                    run_id=run_id,
+                    application_id=request.application_id,
+                    target_url=target_url,
+                    target_platform=PlatformType.WEB,
+                    browser=browser_enum,
+                    steps=[s.model_dump() for s in request.steps],
+                    checks=[c.model_dump() for c in request.checks],
+                    parameters=request.parameters,
+                    timeout_ms=request.timeout_ms,
+                    headless=_should_run_headless(request),
+                    capture_screenshot=request.capture_screenshot,
+                    capture_video=request.capture_video,
+                    capture_audio=request.capture_audio,
+                    voice_gender=getattr(request, "voice_gender", "male"),
+                    slow_mode=getattr(request, "slow_mode", "normal"),
+                    trace_mode=getattr(request, "trace_mode", "on_failure"),
+                    healing_enabled=request.healing_enabled,
+                    healing_attempts=request.healing_attempts,
+                    ai_provider=request.ai_provider,
+                    ai_model=request.ai_model,
+                    provider_id=provider_id,
+                    provider_config=getattr(request, "provider_config", {}),
+                )
+                c_res = await prov.execute(canonical_req)
+                return ExecutionResponse(
+                    run_id=run_id,
+                    url=target_url,
+                    status=c_res.status,
+                    failure_type=c_res.failure_type,
+                    failure_summary=c_res.failure_summary,
+                    title=f"Execution on {prov.name}",
+                    duration_ms=c_res.duration_ms,
+                    audio_status="disabled",
+                    screenshot_path=None,
+                    checks=[CheckResult(**c) for c in c_res.checks] if c_res.checks else [],
+                    step_results=[StepResult(**s) for s in c_res.step_results] if c_res.step_results else [],
+                    step_artifacts=[],
+                    artifacts=[ExecutionArtifact(**a) for a in c_res.artifacts] if c_res.artifacts else [],
+                    console_errors=c_res.console_errors,
+                    network_errors=c_res.network_errors,
+                    error=c_res.error,
+                    healer_agent=c_res.healer_agent,
+                    healed_steps=c_res.healed_steps,
+                    execution_provider=provider_id,
+                    browser=raw_browser,
+                    remote_session_id=c_res.remote_session_id,
+                    remote_dashboard_url=c_res.remote_dashboard_url,
+                )
+
         await _emit_execution_event(event_callback, "STARTING", "Starting Playwright execution worker.")
         async with async_playwright() as playwright:
             headless_mode = _should_run_headless(request)
             slow_mo_ms = _resolve_slow_mo_ms(request, headless_mode)
             launch_args = []
-            if not headless_mode:
-                launch_args.extend([
-                    "--start-maximized",
-                    "--window-size=1440,900",
-                    "--window-position=0,0",
-                ])
-                if os.name == "nt":
+            browser_choice = getattr(request, "browser", "chromium").lower()
+            if browser_choice == "firefox":
+                browser_launcher = playwright.firefox
+            elif browser_choice in ("webkit", "safari"):
+                browser_launcher = playwright.webkit
+            else:
+                browser_launcher = playwright.chromium
+                if not headless_mode:
                     launch_args.extend([
-                        "--force-device-scale-factor=1",
+                        "--start-maximized",
+                        "--window-size=1440,900",
+                        "--window-position=0,0",
                     ])
+                    if os.name == "nt":
+                        launch_args.extend([
+                            "--force-device-scale-factor=1",
+                        ])
             await _emit_execution_event(
                 event_callback,
                 "BROWSER_LAUNCHING",
-                "Launching visible browser window." if not headless_mode else "Launching background headless browser.",
+                f"Launching {browser_choice.capitalize()} browser window." if not headless_mode else f"Launching background headless {browser_choice.capitalize()}.",
             )
-            browser = await playwright.chromium.launch(
+            browser = await browser_launcher.launch(
                 headless=headless_mode,
                 args=launch_args,
                 slow_mo=slow_mo_ms,
@@ -2809,6 +2875,8 @@ async def execute_web_target(
             network_errors=network_errors,
             healer_agent="playwright-test-healer" if request.healing_enabled else None,
             healed_steps=healed_steps,
+            execution_provider=getattr(request, "execution_provider", "local"),
+            browser=getattr(request, "browser", "chromium"),
         )
         return ExecutionResponse.model_validate(sanitize_redacted_secrets(res_obj.model_dump()))
     except Exception as error:
@@ -2845,5 +2913,7 @@ async def execute_web_target(
             network_errors=network_errors,
             healer_agent="playwright-test-healer" if request.healing_enabled else None,
             healed_steps=healed_steps,
+            execution_provider=getattr(request, "execution_provider", "local"),
+            browser=getattr(request, "browser", "chromium"),
         )
         return ExecutionResponse.model_validate(sanitize_redacted_secrets(err_res_obj.model_dump()))

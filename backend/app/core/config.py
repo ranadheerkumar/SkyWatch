@@ -145,8 +145,20 @@ class Settings:
         "https://generativelanguage.googleapis.com/v1beta/openai",
     ).strip().rstrip("/")
 
-    # Playwright Execution Settings
+    # Playwright & Multi-Environment Execution Settings
+    EXECUTION_PROVIDER: str = os.getenv("SKYWATCH_EXECUTION_PROVIDER", os.getenv("EXECUTION_PROVIDER", "local")).strip().lower()
     EXECUTION_MODE: str = os.getenv("SKYWATCH_EXECUTION_MODE", os.getenv("AI_QA_ENGINE_EXECUTION_MODE", "watch_live"))
+    SAUCE_USERNAME: str = os.getenv("SAUCE_USERNAME", "").strip()
+    SAUCE_ACCESS_KEY: str = os.getenv("SAUCE_ACCESS_KEY", "").strip()
+    SAUCE_REGION: str = os.getenv("SAUCE_REGION", "us-west-1").strip()
+    SAUCE_TUNNEL_IDENTIFIER: str = os.getenv("SAUCE_TUNNEL_IDENTIFIER", "").strip()
+    LT_USERNAME: str = os.getenv("LT_USERNAME", "").strip()
+    LT_ACCESS_KEY: str = os.getenv("LT_ACCESS_KEY", "").strip()
+    LT_TUNNEL: bool = os.getenv("LT_TUNNEL", "false").lower() in ("true", "1")
+    CLOUD_RUNNER_TARGET: str = os.getenv("CLOUD_RUNNER_TARGET", "docker").strip().lower()
+    AZURE_CONTAINER_APP_URL: str = os.getenv("AZURE_CONTAINER_APP_URL", "").strip()
+    GCP_CLOUD_RUN_JOB: str = os.getenv("GCP_CLOUD_RUN_JOB", "").strip()
+    AWS_ECS_CLUSTER: str = os.getenv("AWS_ECS_CLUSTER", "").strip()
     STEP_SETTLE_MS: int = int(os.getenv("SKYWATCH_STEP_SETTLE_MS", os.getenv("AI_QA_ENGINE_STEP_SETTLE_MS", "1200")))
     VISIBLE_SLOW_MO_MS: int = int(os.getenv("SKYWATCH_PLAYWRIGHT_SLOW_MO_MS", os.getenv("AI_QA_ENGINE_PLAYWRIGHT_SLOW_MO_MS", "450")))
     DEMO_SLOW_MO_MS: int = int(os.getenv("SKYWATCH_PLAYWRIGHT_DEMO_SLOW_MO_MS", os.getenv("AI_QA_ENGINE_PLAYWRIGHT_DEMO_SLOW_MO_MS", "900")))
