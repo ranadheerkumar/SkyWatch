@@ -38,6 +38,14 @@ XRAY_CLOUD_GRAPHQL_URL = "https://xray.cloud.getxray.app/api/v2/graphql"
 XRAY_CLOUD_REST_BASE = "https://xray.cloud.getxray.app/api/v2"
 
 
+def _get_ssl_verify() -> Any:
+    try:
+        import certifi
+        return certifi.where()
+    except Exception:
+        return True
+
+
 class XrayClient(IntegrationClient):
     """Low-level HTTP client handling Xray Cloud & Server API protocols."""
 
@@ -55,7 +63,7 @@ class XrayClient(IntegrationClient):
             client_id = self.connection.username
             client_secret = self.credential
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
+                async with httpx.AsyncClient(timeout=15.0, verify=_get_ssl_verify()) as client:
                     resp = await client.post(
                         XRAY_CLOUD_AUTH_URL,
                         json={"client_id": client_id, "client_secret": client_secret},
@@ -100,7 +108,7 @@ class XrayClient(IntegrationClient):
             target_url = f"{base}/{path.lstrip('/')}"
 
         try:
-            async with httpx.AsyncClient(timeout=settings.INTEGRATION_TIMEOUT_SECONDS) as client:
+            async with httpx.AsyncClient(timeout=settings.INTEGRATION_TIMEOUT_SECONDS, verify=_get_ssl_verify()) as client:
                 resp = await client.request(
                     method.upper(),
                     target_url,
@@ -441,7 +449,7 @@ class XrayProvider(TestManagementProvider):
         auth_header = {"Authorization": f"Bearer {token}"}
 
         target_url = f"{self.connection.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=_get_ssl_verify()) as client:
             resp = await client.post(
                 target_url,
                 files=files,

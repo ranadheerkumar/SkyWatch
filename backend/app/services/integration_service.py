@@ -42,18 +42,21 @@ def integration_environment_value(name: str, fallback: str = "") -> str:
 
 
 def environment_credential(system: str) -> str:
-    credential_name = (
-        integration_environment_value("JIRA_CREDENTIAL_ENV_NAME", settings.JIRA_CREDENTIAL_ENV_NAME)
-        if system == "jira"
-        else integration_environment_value("QTEST_CREDENTIAL_ENV_NAME", settings.QTEST_CREDENTIAL_ENV_NAME)
-    )
+    if system == "jira":
+        credential_name = integration_environment_value("JIRA_CREDENTIAL_ENV_NAME", settings.JIRA_CREDENTIAL_ENV_NAME)
+        fallback = settings.JIRA_API_TOKEN
+    elif system == "qtest":
+        credential_name = integration_environment_value("QTEST_CREDENTIAL_ENV_NAME", settings.QTEST_CREDENTIAL_ENV_NAME)
+        fallback = settings.QTEST_TOKEN
+    elif system == "xray":
+        credential_name = integration_environment_value("XRAY_CREDENTIAL_ENV_NAME", getattr(settings, "XRAY_CREDENTIAL_ENV_NAME", "XRAY_CLIENT_SECRET"))
+        fallback = getattr(settings, "XRAY_CLIENT_SECRET", "")
+    else:
+        return ""
     configured_value = os.environ.get(credential_name)
     if configured_value is not None and configured_value.strip():
         return configured_value.strip()
-    return integration_environment_value(
-        "JIRA_API_TOKEN" if system == "jira" else "QTEST_TOKEN",
-        settings.JIRA_API_TOKEN if system == "jira" else settings.QTEST_TOKEN,
-    )
+    return fallback
 
 
 def environment_connection(system: str) -> IntegrationConnection | None:
@@ -98,6 +101,28 @@ def environment_connection(system: str) -> IntegrationConnection | None:
             auth_type="bearer_token",
             secret_ref=credential_env_name or None,
             status="active",
+            created_by=0,
+        )
+    if system == "xray":
+        base_url = integration_environment_value("XRAY_BASE_URL", getattr(settings, "XRAY_BASE_URL", "https://xray.cloud.getxray.app"))
+        client_id = integration_environment_value("XRAY_CLIENT_ID", getattr(settings, "XRAY_CLIENT_ID", ""))
+        project_key = integration_environment_value("XRAY_PROJECT_KEY", getattr(settings, "XRAY_PROJECT_KEY", "XSP"))
+        profile_name = integration_environment_value("XRAY_PROFILE_NAME", getattr(settings, "XRAY_PROFILE_NAME", "Xray Cloud Production"))
+        credential_env_name = integration_environment_value("XRAY_CREDENTIAL_ENV_NAME", getattr(settings, "XRAY_CREDENTIAL_ENV_NAME", "XRAY_CLIENT_SECRET"))
+        cred = environment_credential("xray")
+        if not base_url or not client_id or not cred:
+            return None
+        return IntegrationConnection(
+            id=ENVIRONMENT_CONNECTION_IDS[system],
+            system="xray",
+            name=profile_name or "Xray environment",
+            base_url=base_url,
+            project_key=project_key or "XSP",
+            username=client_id or None,
+            auth_type="oauth2_client_credentials",
+            secret_ref=credential_env_name or None,
+            status="active",
+            last_test_status="success",
             created_by=0,
         )
     return None

@@ -303,6 +303,143 @@ class ExternalObjectMapping(BaseModel):
 
 
 # ==============================================================================
+# Canonical Enterprise Reporting Models (Jira + Xray + qTest + Execution Providers)
+# ==============================================================================
+
+class AutomationClassification(str, Enum):
+    MANUAL = "MANUAL"
+    AUTOMATED = "AUTOMATED"
+    PARTIALLY_AUTOMATED = "PARTIALLY_AUTOMATED"
+    CANDIDATE = "CANDIDATE"
+
+
+class TraceabilityGapType(str, Enum):
+    NONE = "NONE"
+    REQUIREMENT_WITHOUT_TEST = "REQUIREMENT_WITHOUT_TEST"
+    TEST_WITHOUT_REQUIREMENT = "TEST_WITHOUT_REQUIREMENT"
+    UNTESTED_TEST = "UNTESTED_TEST"
+    FAILING_WITHOUT_DEFECT = "FAILING_WITHOUT_DEFECT"
+    DEFECT_WITHOUT_TEST = "DEFECT_WITHOUT_TEST"
+
+
+class XrayPlanMetrics(BaseModel):
+    """Canonical test plan progress metrics for Xray and ALM platforms."""
+    plan_key: str
+    plan_name: str
+    total_tests: int = 0
+    executed_tests: int = 0
+    passed: int = 0
+    failed: int = 0
+    blocked: int = 0
+    skipped: int = 0
+    not_executed: int = 0
+    pass_rate: float = 0.0
+    remaining_tests: int = 0
+    environment: str | None = None
+
+
+class XraySetSummary(BaseModel):
+    """Canonical test set summary grouping."""
+    set_key: str
+    name: str
+    test_count: int = 0
+    passed: int = 0
+    failed: int = 0
+    pass_rate: float = 0.0
+
+
+class AutomationCoverageMetrics(BaseModel):
+    """Deep automation posture distinguishing manual, automated, partial, and candidates."""
+    total_tests: int = 0
+    manual_tests: int = 0
+    automated_tests: int = 0
+    partially_automated_tests: int = 0
+    automation_candidates: int = 0
+    automation_coverage_rate: float = 0.0
+    automation_execution_rate: float = 0.0
+    automation_pass_rate: float = 0.0
+    manual_pass_rate: float = 0.0
+
+
+class TraceabilityLink(BaseModel):
+    """End-to-end traceability correlation across Requirements, Tests, Executions, and Defects."""
+    requirement_id: str | None = None
+    requirement_key: str | None = None
+    requirement_title: str | None = None
+    requirement_source: str | None = None  # jira, xray, qtest, skywatch
+    test_id: str
+    test_title: str
+    test_source: str = "skywatch"  # skywatch, xray, qtest
+    test_automation_status: str = "manual"
+    last_execution_id: str | None = None
+    execution_provider: str | None = None  # local, azure, gcp, aws, sauce_labs, lambdatest
+    execution_status: str | None = None  # PASSED, FAILED, etc.
+    execution_duration_ms: float | None = None
+    defect_id: str | None = None
+    defect_key: str | None = None
+    defect_title: str | None = None
+    defect_status: str | None = None
+    defect_severity: str | None = None
+    defect_url: str | None = None
+    release_version: str | None = None
+    gap_type: TraceabilityGapType = TraceabilityGapType.NONE
+
+
+class IntegrationHealthStatus(BaseModel):
+    """Live health posture of an ALM or external execution provider integration."""
+    system: str  # jira, xray, qtest, git, saucelabs, etc.
+    name: str
+    status: str = "connected"  # connected, degraded, disconnected, unconfigured
+    latency_ms: float | None = None
+    last_sync_at: str | None = None
+    last_error: str | None = None
+    failed_sync_count: int = 0
+    pending_jobs: int = 0
+
+
+class UnifiedExecutionItem(BaseModel):
+    """Unified test execution across any execution provider and test management tool."""
+    run_id: str
+    test_case_id: int | None = None
+    test_title: str
+    source_system: str = "skywatch"  # skywatch, xray, qtest
+    execution_provider: str = "local"  # local, azure, gcp, aws, sauce_labs, lambdatest
+    environment: str = "production"
+    browser: str | None = None
+    device: str | None = None
+    status: str = "passed"
+    duration_ms: float = 0.0
+    started_at: str | None = None
+    finished_at: str | None = None
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    external_references: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DataFreshnessInfo(BaseModel):
+    """Synchronization freshness metadata for external ALM data."""
+    system: str
+    last_synced_at: str | None = None
+    is_live: bool = False
+    sync_status: str = "synced"  # synced, syncing, stale, error
+
+
+class UnifiedQualityReport(BaseModel):
+    """Consolidated enterprise quality report unifying SkyWatch with Jira, Xray, and qTest."""
+    id: str
+    project_id: str
+    generated_at: str
+    summary: dict[str, Any]
+    source_breakdown: dict[str, Any]  # skywatch, xray, jira, qtest counts
+    provider_breakdown: dict[str, Any]  # local, azure, gcp, aws, sauce_labs, lambdatest counts
+    xray_plans: list[XrayPlanMetrics] = Field(default_factory=list)
+    xray_sets: list[XraySetSummary] = Field(default_factory=list)
+    automation_metrics: AutomationCoverageMetrics = Field(default_factory=AutomationCoverageMetrics)
+    defect_metrics: dict[str, Any] = Field(default_factory=dict)
+    data_freshness: dict[str, DataFreshnessInfo] = Field(default_factory=dict)
+    ai_insights: dict[str, list[str]] = Field(default_factory=dict)
+
+
+# ==============================================================================
 # Ingestion & Egress Adapters (Mapping External Schemas to Canonical Models)
 # ==============================================================================
 

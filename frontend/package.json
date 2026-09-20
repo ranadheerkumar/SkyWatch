@@ -1,6 +1,6 @@
 {
 	"name": "skywatch-qa-platform",
-	"version": "2.7.0",
+	"version": "2.8.0",
 	"private": true,
 	"scripts": {
 		"clean:next": "node ./scripts/clean-next.cjs",

@@ -1,6 +1,42 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.7.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.8.0`.
+
+## [2.8.0] - 2026-09-20
+
+### Added
+- **Unified Quality Reporting Architecture (SkyWatch + Jira + Xray + qTest)**:
+  - **Canonical Quality Schemas (`universal_quality_model.py`)**: Added `AutomationClassification`, `TraceabilityGapType`, `XrayPlanMetrics`, `XraySetSummary`, `AutomationCoverageMetrics`, `TraceabilityLink`, `IntegrationHealthStatus`, `UnifiedExecutionItem`, `DataFreshnessInfo`, and `UnifiedQualityReport`.
+  - **Unified Reporting Engine (`UnifiedReportingEngine`)**:
+    - Multi-source quality aggregation engine in `report_service.py` with 60-second TTL caching.
+    - Live Xray Cloud GraphQL ingestion (`_fetch_live_xray_cloud`) fetching live test plans, executions, and tests directly using authenticated client credentials.
+    - Automation intelligence classifying manual, automated, partially automated, and candidate tests with pass rates and coverage percentages.
+    - Defect metrics and aging analysis (<3d, 3-7d, 7-14d, >14d) correlated across Jira, Xray, and local defect trackers.
+    - Multi-provider execution distribution: Local Playwright, Sauce Labs, LambdaTest, Azure, GCP, AWS.
+    - Complete traceability matrix with automated gap detection (`UNCOVERED_REQUIREMENT`, `UNTESTED_TEST`, `FAILING_WITHOUT_DEFECT`, `NONE`).
+    - AI Insights separating observations strictly into **[FACT]**, **[ANALYSIS]**, and **[RECOMMENDATION]**.
+    - Unified export supporting identical reporting figures across CSV, JSON, and Markdown.
+  - **REST API Suite (`app/api/v1/reports.py`)**:
+    - Added `/reports/unified/overview`: Multi-source consolidated quality report.
+    - Added `/reports/executions`: Cross-provider unified execution history with deep links.
+    - Added `/reports/tests`: Automation breakdown and source systems.
+    - Added `/reports/coverage`: Automation and requirements coverage metrics.
+    - Added `/reports/defects`: Defect distribution, severity, and aging analysis.
+    - Added `/reports/requirements`: Requirements status and coverage.
+    - Added `/reports/test-plans`: Xray and qTest test plans and test sets with execution progress.
+    - Added `/reports/traceability`: Full traceability matrix with gap classification.
+    - Added `/reports/trends`: Historical trends and multi-system execution velocities.
+    - Added `/reports/integrations`: Real-time health, latency, and sync posture.
+    - Added `/reports/export`: Canonical export in CSV, JSON, and Markdown.
+  - **Frontend Quality Reports Experience (`QualityReportsWorkspace.tsx`)**:
+    - Unified reporting workspace with multi-source selector (`All`, `SkyWatch`, `Jira`, `Xray`, `qTest`) and live data freshness badges.
+    - 6 consolidated sub-tabs: `Overview & KPIs`, `Executions & Providers`, `Xray Plans & Sets`, `Automation Intelligence`, `Traceability Matrix`, `Integration Health`.
+    - Real-time drill-down modals and direct ALM deep-links (`Open in XRAY: XSP-39`).
+    - Dynamic CSV export generating multi-section reports matching all UI KPIs.
+- **Automated Verification**:
+  - Authored comprehensive test suite `backend/tests/test_unified_reporting.py` (11 unit tests).
+  - All 37 backend tests passed cleanly.
+  - All 24 frontend tests and TypeScript typechecks passed with 0 errors.
 
 ## [2.7.0] - 2026-09-20
 

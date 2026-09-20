@@ -1,5 +1,11 @@
-from pydantic import BaseModel, EmailStr, Field
 from typing import Literal
+from pydantic import BaseModel, Field
+
+try:
+    import email_validator  # noqa: F401
+    from pydantic import EmailStr
+except Exception:
+    EmailStr = str  # type: ignore[assignment,misc]
 
 
 class RegisterRequest(BaseModel):

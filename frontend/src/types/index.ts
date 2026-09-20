@@ -70,6 +70,8 @@ export type TestCase = {
 	created_by: number;
 	priority?: string;
 	category?: string;
+	automation_status?: string;
+	tags?: string[];
 	updated_at?: string;
 };
 
@@ -554,3 +556,158 @@ export type GitRepo = {
 	html_url: string;
 	description?: string;
 };
+
+// ============================================================================
+// Unified Reporting Types (Jira + Xray + qTest + Execution Providers)
+// ============================================================================
+
+export type XrayPlanMetrics = {
+	plan_key: string;
+	plan_name: string;
+	total_tests: number;
+	executed_tests: number;
+	passed: number;
+	failed: number;
+	blocked: number;
+	skipped: number;
+	not_executed: number;
+	pass_rate: number;
+	remaining_tests: number;
+	environment?: string | null;
+};
+
+export type XraySetSummary = {
+	set_key: string;
+	name: string;
+	test_count: number;
+	passed: number;
+	failed: number;
+	pass_rate: number;
+};
+
+export type AutomationCoverageMetrics = {
+	total_tests: number;
+	manual_tests: number;
+	automated_tests: number;
+	partially_automated_tests: number;
+	automation_candidates: number;
+	automation_coverage_rate: number;
+	automation_execution_rate: number;
+	automation_pass_rate: number;
+	manual_pass_rate: number;
+};
+
+export type TraceabilityGapType =
+	| "NONE"
+	| "REQUIREMENT_WITHOUT_TEST"
+	| "TEST_WITHOUT_REQUIREMENT"
+	| "UNTESTED_TEST"
+	| "FAILING_WITHOUT_DEFECT"
+	| "DEFECT_WITHOUT_TEST";
+
+export type TraceabilityLink = {
+	requirement_id?: string | null;
+	requirement_key?: string | null;
+	requirement_title?: string | null;
+	requirement_source?: string | null;
+	test_id: string;
+	test_title: string;
+	test_source: string;
+	test_automation_status: string;
+	last_execution_id?: string | null;
+	execution_provider?: string | null;
+	execution_status?: string | null;
+	execution_duration_ms?: number | null;
+	defect_id?: string | null;
+	defect_key?: string | null;
+	defect_title?: string | null;
+	defect_status?: string | null;
+	defect_severity?: string | null;
+	defect_url?: string | null;
+	release_version?: string | null;
+	gap_type: TraceabilityGapType;
+};
+
+export type IntegrationHealthStatus = {
+	system: string;
+	name: string;
+	status: "connected" | "degraded" | "disconnected" | "unconfigured";
+	latency_ms?: number | null;
+	last_sync_at?: string | null;
+	last_error?: string | null;
+	failed_sync_count: number;
+	pending_jobs: number;
+	base_url?: string | null;
+};
+
+export type UnifiedExecutionItem = {
+	run_id: string;
+	application_id?: number | null;
+	test_case_id?: number | null;
+	test_title: string;
+	source_system: string;
+	execution_provider: string;
+	environment: string;
+	browser?: string | null;
+	device?: string | null;
+	status: string;
+	duration_ms: number;
+	started_at?: string | null;
+	finished_at?: string | null;
+	artifacts?: Array<{ type: string; path: string; label: string }>;
+	external_references?: Array<{ system: string; external_key: string; external_url: string; label: string }>;
+};
+
+export type DataFreshnessInfo = {
+	system: string;
+	last_synced_at?: string | null;
+	is_live: boolean;
+	sync_status: string;
+};
+
+export type UnifiedQualityReport = {
+	id: string;
+	project_id: string;
+	application_id?: number | null;
+	generated_at: string;
+	summary: {
+		quality_score: number;
+		risk_score: number;
+		release_readiness: string;
+		total_cases: number;
+		total_runs: number;
+		completed_runs: number;
+		passed_runs: number;
+		failed_runs: number;
+		pass_rate: number;
+		failure_rate: number;
+		open_defects: number;
+		critical_defects: number;
+		resolved_defects: number;
+		automation_coverage_percent: number;
+	};
+	source_breakdown: Record<string, number>;
+	provider_breakdown: Record<string, number>;
+	xray_plans: XrayPlanMetrics[];
+	xray_sets: XraySetSummary[];
+	automation_metrics: AutomationCoverageMetrics;
+	defect_metrics: {
+		total_defects: number;
+		open_defects: number;
+		critical_defects: number;
+		resolved_defects: number;
+		aging: {
+			under_3d: number;
+			"3_to_7d": number;
+			"7_to_14d": number;
+			over_14d: number;
+		};
+	};
+	data_freshness: Record<string, DataFreshnessInfo>;
+	ai_insights: {
+		facts: string[];
+		analysis: string[];
+		recommendations: string[];
+	};
+};
+

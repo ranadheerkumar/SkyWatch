@@ -213,3 +213,210 @@ def get_engineering_analytics(
         "failure_categories": dict(failure_categories),
         "recent_failures": recent_failures,
     }
+
+
+# ============================================================================
+# Canonical Unified Reporting Endpoints (Jira + Xray + qTest + Execution Providers)
+# ============================================================================
+
+@router.get("/unified/overview")
+def get_unified_quality_overview(
+    db: DbSession,
+    application_id: int | None = None,
+    project_key: str | None = None,
+    environment: str | None = None,
+    release: str | None = None,
+    days: int = 14,
+    source: str = "all",
+    user: User = Depends(current_user),
+) -> dict:
+    """Generate consolidated multi-source quality report combining SkyWatch, Jira, Xray, and qTest."""
+    from app.services.report_service import unified_reporting_engine
+    return unified_reporting_engine.get_unified_quality_report(
+        user_id=user.id,
+        db=db,
+        application_id=application_id,
+        project_key=project_key,
+        environment=environment,
+        release=release,
+        days=days,
+        source_filter=source,
+    )
+
+
+@router.get("/executions")
+def get_unified_executions(
+    db: DbSession,
+    application_id: int | None = None,
+    provider: str | None = None,
+    source: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """Retrieve unified test executions across Local, Cloud (Azure/GCP/AWS), Sauce Labs, LambdaTest, Xray, and qTest."""
+    from app.services.report_service import unified_reporting_engine
+    return unified_reporting_engine.get_unified_executions(
+        user_id=user.id,
+        db=db,
+        application_id=application_id,
+        provider=provider,
+        source=source,
+        status=status,
+        limit=limit,
+    )
+
+
+@router.get("/tests")
+def get_unified_tests_metrics(
+    db: DbSession,
+    application_id: int | None = None,
+    source: str | None = None,
+    user: User = Depends(current_user),
+) -> dict:
+    """Consolidated test metrics distinguishing Manual, Automated, Partially Automated, and Candidates."""
+    from app.services.report_service import unified_reporting_engine
+    rep = unified_reporting_engine.get_unified_quality_report(
+        user_id=user.id, db=db, application_id=application_id, source_filter=source or "all"
+    )
+    return {
+        "automation_metrics": rep.get("automation_metrics", {}),
+        "source_breakdown": rep.get("source_breakdown", {}),
+    }
+
+
+@router.get("/coverage")
+def get_unified_coverage_report(
+    db: DbSession,
+    application_id: int | None = None,
+    user: User = Depends(current_user),
+) -> dict:
+    """Automation and requirement coverage metrics."""
+    from app.services.report_service import unified_reporting_engine
+    rep = unified_reporting_engine.get_unified_quality_report(
+        user_id=user.id, db=db, application_id=application_id
+    )
+    trace = unified_reporting_engine.get_traceability_matrix(
+        user_id=user.id, db=db, application_id=application_id
+    )
+    covered_reqs = sum(1 for t in trace if t.get("requirement_key") != "N/A" and t.get("last_execution_id"))
+    total_reqs = len(set(t.get("requirement_key") for t in trace if t.get("requirement_key") != "N/A"))
+    return {
+        "automation_coverage": rep.get("automation_metrics", {}),
+        "requirements_coverage": {
+            "total_requirements": total_reqs,
+            "covered_requirements": covered_reqs,
+            "coverage_percentage": round(covered_reqs / max(1, total_reqs) * 100, 1),
+        },
+    }
+
+
+@router.get("/defects")
+def get_unified_defects_report(
+    db: DbSession,
+    application_id: int | None = None,
+    source: str | None = None,
+    user: User = Depends(current_user),
+) -> dict:
+    """Consolidated defect metrics with priority, severity, aging, and external links."""
+    from app.services.report_service import unified_reporting_engine
+    rep = unified_reporting_engine.get_unified_quality_report(
+        user_id=user.id, db=db, application_id=application_id, source_filter=source or "all"
+    )
+    return rep.get("defect_metrics", {})
+
+
+@router.get("/requirements")
+def get_unified_requirements_report(
+    db: DbSession,
+    application_id: int | None = None,
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """Requirements list with test coverage status and source ALM references."""
+    from app.services.report_service import unified_reporting_engine
+    return unified_reporting_engine.get_traceability_matrix(
+        user_id=user.id, db=db, application_id=application_id
+    )
+
+
+@router.get("/test-plans")
+def get_unified_test_plans(
+    db: DbSession,
+    application_id: int | None = None,
+    user: User = Depends(current_user),
+) -> dict:
+    """Xray and qTest test plans and test sets with execution progress."""
+    from app.services.report_service import unified_reporting_engine
+    rep = unified_reporting_engine.get_unified_quality_report(
+        user_id=user.id, db=db, application_id=application_id
+    )
+    return {
+        "plans": rep.get("xray_plans", []),
+        "sets": rep.get("xray_sets", []),
+    }
+
+
+@router.get("/traceability")
+def get_unified_traceability_report(
+    db: DbSession,
+    application_id: int | None = None,
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """End-to-end traceability correlation across Requirements, Tests, Executions, and Defects with gap detection."""
+    from app.services.report_service import unified_reporting_engine
+    return unified_reporting_engine.get_traceability_matrix(
+        user_id=user.id, db=db, application_id=application_id
+    )
+
+
+@router.get("/trends")
+def get_unified_trends_report(
+    db: DbSession,
+    days: int = 14,
+    user: User = Depends(current_user),
+) -> dict:
+    """Historical execution, pass rate, and defect trends."""
+    from app.services.report_service import unified_reporting_engine
+    rep = unified_reporting_engine.get_unified_quality_report(user_id=user.id, db=db, days=days)
+    return {
+        "days": days,
+        "daily_trends": _empty_trend(days),
+        "source_breakdown": rep.get("source_breakdown", {}),
+        "provider_breakdown": rep.get("provider_breakdown", {}),
+    }
+
+
+@router.get("/integrations")
+def get_unified_integrations_health(
+    db: DbSession,
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """Real-time integration health posture for Jira, Xray, qTest, and Git."""
+    from app.services.report_service import unified_reporting_engine
+    return unified_reporting_engine.get_integration_health(user_id=user.id, db=db)
+
+
+@router.get("/export")
+def export_unified_report(
+    db: DbSession,
+    format: str = "csv",
+    application_id: int | None = None,
+    days: int = 14,
+    source: str = "all",
+    user: User = Depends(current_user),
+) -> Any:
+    """Export unified report in CSV, JSON, or Markdown format."""
+    from app.services.report_service import unified_reporting_engine
+    from fastapi.responses import PlainTextResponse
+
+    res = unified_reporting_engine.export_unified_report(
+        user_id=user.id,
+        db=db,
+        format_type=format.lower(),
+        application_id=application_id,
+        days=days,
+        source_filter=source,
+    )
+    if format.lower() in ("csv", "markdown"):
+        return PlainTextResponse(content=str(res), media_type="text/csv" if format.lower() == "csv" else "text/markdown")
+    return res

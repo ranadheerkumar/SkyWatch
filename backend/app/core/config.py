@@ -91,6 +91,13 @@ class Settings:
     QTEST_PROFILE_NAME: str = os.getenv("QTEST_PROFILE_NAME", "").strip()
     QTEST_CREDENTIAL_ENV_NAME: str = os.getenv("QTEST_CREDENTIAL_ENV_NAME", "QTEST_TOKEN").strip()
 
+    XRAY_BASE_URL: str = os.getenv("XRAY_BASE_URL", "https://xray.cloud.getxray.app").strip()
+    XRAY_CLIENT_ID: str = os.getenv("XRAY_CLIENT_ID", "").strip()
+    XRAY_CLIENT_SECRET: str = os.getenv("XRAY_CLIENT_SECRET", "").strip()
+    XRAY_PROJECT_KEY: str = os.getenv("XRAY_PROJECT_KEY", "XSP").strip()
+    XRAY_PROFILE_NAME: str = os.getenv("XRAY_PROFILE_NAME", "Xray Cloud Production").strip()
+    XRAY_CREDENTIAL_ENV_NAME: str = os.getenv("XRAY_CREDENTIAL_ENV_NAME", "XRAY_CLIENT_SECRET").strip()
+
     # Initial Admin Seed
     INITIAL_ADMIN_EMAIL: str = os.getenv(
         "INITIAL_ADMIN_EMAIL",
