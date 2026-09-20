@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
-export type IntegrationSystem = "jira" | "qtest";
+export type IntegrationSystem = "jira" | "qtest" | "xray" | "github" | "gitlab";
 export type IntegrationStatus = "untested" | "active" | "inactive" | "error";
-export type IntegrationAuthType = "api_token" | "basic_api_token" | "bearer_token";
+export type IntegrationAuthType = "api_token" | "basic_api_token" | "bearer_token" | "oauth2_client_credentials";
 export type IntegrationAssetType =
   | "requirements"
   | "modules"
@@ -15,6 +15,51 @@ export type IntegrationAssetType =
   | "test_runs"
   | "test_logs"
   | "metadata";
+
+export type FieldMappingRule = {
+  source_field: string;
+  target_canonical_field: string;
+  transform?: string | null;
+  default_value?: any;
+};
+
+export type StatusMappingRule = {
+  source_status: string;
+  target_canonical_status: string;
+};
+
+export type ConnectionMappings = {
+  connection_id?: number;
+  system?: IntegrationSystem;
+  field_mappings: FieldMappingRule[];
+  status_mappings: StatusMappingRule[];
+};
+
+export type SyncDirection = "bidirectional" | "import_to_skywatch" | "export_to_external";
+export type SyncConflictPolicy = "external_wins" | "skywatch_wins" | "manual_review";
+
+export type SyncExecutionRequest = {
+  connection_id: number;
+  direction?: SyncDirection;
+  entity_types?: string[];
+  conflict_policy?: SyncConflictPolicy;
+  dry_run?: boolean;
+};
+
+export type SyncExecutionResponse = {
+  job_id: string;
+  connection_id: number;
+  system: IntegrationSystem;
+  direction: SyncDirection;
+  status: "completed" | "failed" | "in_progress";
+  entities_synced: number;
+  entities_failed: number;
+  conflicts_detected: number;
+  error_details?: string[];
+  started_at: string;
+  completed_at?: string;
+  duration_ms?: number;
+};
 
 export type IntegrationConnection = {
   id: number;
@@ -120,21 +165,27 @@ export interface IntegrationConnectionsPanelProps {
   onTest: (connectionId: number) => Promise<IntegrationTestResult>;
   onSetActive: (connectionId: number, active: boolean) => Promise<IntegrationConnection>;
   onLoadAssets: (connectionId: number, assetType: IntegrationAssetType) => Promise<IntegrationAssetResponse>;
+  onSync?: (connectionId: number, request: Partial<SyncExecutionRequest>) => Promise<SyncExecutionResponse>;
+  onLoadMappings?: (connectionId: number) => Promise<ConnectionMappings>;
+  onSaveMappings?: (connectionId: number, mappings: ConnectionMappings) => Promise<ConnectionMappings>;
 }
 
 function emptyDraft(system: IntegrationSystem = "jira", environment?: IntegrationEnvironmentProfile): IntegrationConnectionDraft {
+  const defaultBaseUrl = system === "xray" ? "https://xray.cloud.getxray.app" : environment?.base_url ?? "";
+  const defaultAuth: IntegrationAuthType =
+    system === "xray" ? "oauth2_client_credentials" : system === "jira" ? "basic_api_token" : "bearer_token";
   return {
     system,
-    name: environment?.profile_name ?? "",
-    base_url: environment?.base_url ?? "",
+    name: environment?.profile_name ?? (system === "xray" ? "Xray Cloud Integration" : ""),
+    base_url: defaultBaseUrl,
     project_key: environment?.project_key ?? "",
     project_name: environment?.project_name ?? "",
     project_id: environment?.project_id ?? "",
     username: environment?.username ?? "",
-    auth_type: system === "jira" ? "basic_api_token" : "bearer_token",
+    auth_type: defaultAuth,
     environment: "",
     credential: "",
-    secret_ref: environment?.credential_env_name ?? "",
+    secret_ref: environment?.credential_env_name ?? (system === "xray" ? "XRAY_CLIENT_SECRET" : ""),
   };
 }
 
@@ -169,6 +220,9 @@ export default function IntegrationConnectionsPanel({
   onSetActive,
   onLoadAssets,
   onUpdateEnvironment,
+  onSync,
+  onLoadMappings,
+  onSaveMappings,
 }: IntegrationConnectionsPanelProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -186,13 +240,39 @@ export default function IntegrationConnectionsPanel({
   const [environmentSaving, setEnvironmentSaving] = useState(false);
   const [environmentDraft, setEnvironmentDraft] = useState<IntegrationEnvironmentUpdate>({});
 
+  // Bidirectional Sync State
+  const [syncModalConnection, setSyncModalConnection] = useState<IntegrationConnection | null>(null);
+  const [syncDirection, setSyncDirection] = useState<SyncDirection>("bidirectional");
+  const [syncConflictPolicy, setSyncConflictPolicy] = useState<SyncConflictPolicy>("external_wins");
+  const [syncEntityTypes, setSyncEntityTypes] = useState<string[]>(["test_case", "test_execution"]);
+  const [syncDryRun, setSyncDryRun] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<SyncExecutionResponse | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Field & Status Mappings State
+  const [mappingsModalConnection, setMappingsModalConnection] = useState<IntegrationConnection | null>(null);
+  const [mappingsActiveTab, setMappingsActiveTab] = useState<"fields" | "statuses">("fields");
+  const [mappingsData, setMappingsData] = useState<ConnectionMappings | null>(null);
+  const [mappingsLoading, setMappingsLoading] = useState(false);
+  const [mappingsSaving, setMappingsSaving] = useState(false);
+  const [mappingsNotice, setMappingsNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  // New mapping rule row drafts
+  const [newSourceField, setNewSourceField] = useState("");
+  const [newTargetCanonicalField, setNewTargetCanonicalField] = useState("");
+  const [newTransform, setNewTransform] = useState("identity");
+  const [newDefaultValue, setNewDefaultValue] = useState("");
+  const [newSourceStatus, setNewSourceStatus] = useState("");
+  const [newTargetCanonicalStatus, setNewTargetCanonicalStatus] = useState("");
+
   const updateDraft = <K extends keyof IntegrationConnectionDraft>(field: K, value: IntegrationConnectionDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
   };
 
   const openCreate = (system: IntegrationSystem) => {
     setEditingId(null);
-    setDraft(emptyDraft(system, environmentConfiguration?.[system]));
+    setDraft(emptyDraft(system, system === "jira" || system === "qtest" ? environmentConfiguration?.[system] : undefined));
     setFormOpen(true);
     setMessage(null);
   };
@@ -316,6 +396,135 @@ export default function IntegrationConnectionsPanel({
     }
   };
 
+  // Sync Modal Handlers
+  const openSyncModal = (connection: IntegrationConnection) => {
+    setSyncModalConnection(connection);
+    setSyncResult(null);
+    setSyncError(null);
+  };
+
+  const closeSyncModal = () => {
+    if (syncing) return;
+    setSyncModalConnection(null);
+  };
+
+  const handleExecuteSync = async () => {
+    if (!syncModalConnection || !onSync) return;
+    setSyncing(true);
+    setSyncError(null);
+    setSyncResult(null);
+    try {
+      const response = await onSync(syncModalConnection.id, {
+        direction: syncDirection,
+        conflict_policy: syncConflictPolicy,
+        entity_types: syncEntityTypes,
+        dry_run: syncDryRun,
+      });
+      setSyncResult(response);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Failed to execute sync job.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const toggleEntityType = (type: string) => {
+    setSyncEntityTypes((current) =>
+      current.includes(type) ? current.filter((t) => t !== type) : [...current, type],
+    );
+  };
+
+  // Mappings Modal Handlers
+  const openMappingsModal = async (connection: IntegrationConnection) => {
+    setMappingsModalConnection(connection);
+    setMappingsNotice(null);
+    if (!onLoadMappings) return;
+    setMappingsLoading(true);
+    try {
+      const mappings = await onLoadMappings(connection.id);
+      setMappingsData(mappings);
+    } catch (error) {
+      setMappingsNotice({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Failed to load mapping rules.",
+      });
+    } finally {
+      setMappingsLoading(false);
+    }
+  };
+
+  const closeMappingsModal = () => {
+    if (mappingsSaving) return;
+    setMappingsModalConnection(null);
+    setMappingsData(null);
+    setMappingsNotice(null);
+  };
+
+  const addFieldMappingRule = () => {
+    if (!newSourceField.trim() || !newTargetCanonicalField.trim() || !mappingsData) return;
+    const rule: FieldMappingRule = {
+      source_field: newSourceField.trim(),
+      target_canonical_field: newTargetCanonicalField.trim(),
+      transform: newTransform.trim() || null,
+      default_value: newDefaultValue.trim() || undefined,
+    };
+    setMappingsData({
+      ...mappingsData,
+      field_mappings: [...mappingsData.field_mappings, rule],
+    });
+    setNewSourceField("");
+    setNewTargetCanonicalField("");
+    setNewDefaultValue("");
+  };
+
+  const removeFieldMappingRule = (index: number) => {
+    if (!mappingsData) return;
+    setMappingsData({
+      ...mappingsData,
+      field_mappings: mappingsData.field_mappings.filter((_, idx) => idx !== index),
+    });
+  };
+
+  const addStatusMappingRule = () => {
+    if (!newSourceStatus.trim() || !newTargetCanonicalStatus.trim() || !mappingsData) return;
+    const rule: StatusMappingRule = {
+      source_status: newSourceStatus.trim(),
+      target_canonical_status: newTargetCanonicalStatus.trim(),
+    };
+    setMappingsData({
+      ...mappingsData,
+      status_mappings: [...mappingsData.status_mappings, rule],
+    });
+    setNewSourceStatus("");
+    setNewTargetCanonicalStatus("");
+  };
+
+  const removeStatusMappingRule = (index: number) => {
+    if (!mappingsData) return;
+    setMappingsData({
+      ...mappingsData,
+      status_mappings: mappingsData.status_mappings.filter((_, idx) => idx !== index),
+    });
+  };
+
+  const handleSaveMappings = async () => {
+    if (!mappingsModalConnection || !mappingsData || !onSaveMappings) return;
+    setMappingsSaving(true);
+    setMappingsNotice(null);
+    try {
+      const updated = await onSaveMappings(mappingsModalConnection.id, mappingsData);
+      setMappingsData(updated);
+      setMappingsNotice({ tone: "success", text: "Mapping rules saved successfully." });
+    } catch (error) {
+      setMappingsNotice({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Unable to save mapping rules.",
+      });
+    } finally {
+      setMappingsSaving(false);
+    }
+  };
+
   const openEnvironmentEditor = () => {
     if (!environmentConfiguration) return;
     setEnvironmentDraft({
@@ -357,21 +566,25 @@ export default function IntegrationConnectionsPanel({
     setMessage(null);
     const jira = environmentDraft.jira;
     const qtest = environmentDraft.qtest;
-    const jiraUpdate = jira ? {
-      base_url: jira.base_url?.trim(),
-      email: jira.email?.trim(),
-      project_key: jira.project_key?.trim(),
-      filter_id: jira.filter_id?.trim(),
-      profile_name: jira.profile_name?.trim(),
-      ...(jira.api_token?.trim() ? { api_token: jira.api_token.trim() } : {}),
-    } : undefined;
-    const qtestUpdate = qtest ? {
-      base_url: qtest.base_url?.trim(),
-      project_id: qtest.project_id?.trim(),
-      project_name: qtest.project_name?.trim(),
-      profile_name: qtest.profile_name?.trim(),
-      ...(qtest.token?.trim() ? { token: qtest.token.trim() } : {}),
-    } : undefined;
+    const jiraUpdate = jira
+      ? {
+          base_url: jira.base_url?.trim(),
+          email: jira.email?.trim(),
+          project_key: jira.project_key?.trim(),
+          filter_id: jira.filter_id?.trim(),
+          profile_name: jira.profile_name?.trim(),
+          ...(jira.api_token?.trim() ? { api_token: jira.api_token.trim() } : {}),
+        }
+      : undefined;
+    const qtestUpdate = qtest
+      ? {
+          base_url: qtest.base_url?.trim(),
+          project_id: qtest.project_id?.trim(),
+          project_name: qtest.project_name?.trim(),
+          profile_name: qtest.profile_name?.trim(),
+          ...(qtest.token?.trim() ? { token: qtest.token.trim() } : {}),
+        }
+      : undefined;
     const update: IntegrationEnvironmentUpdate = {
       jira: jiraUpdate && Object.values(jiraUpdate).some((value) => Boolean(value)) ? jiraUpdate : undefined,
       qtest: qtestUpdate && Object.values(qtestUpdate).some((value) => Boolean(value)) ? qtestUpdate : undefined,
@@ -394,11 +607,14 @@ export default function IntegrationConnectionsPanel({
       <div className="integration-section-heading">
         <div>
           <p className="integration-eyebrow">Enterprise connectors</p>
-          <h2 id="integrations-heading">Jira and qTest integrations</h2>
-          <p className="settings-field-help">Manage local connection profiles and inspect bounded Jira/qTest metadata. External records are read-only.</p>
+          <h2 id="integrations-heading">Jira, Xray, and qTest Integrations</h2>
+          <p className="settings-field-help">
+            Manage enterprise test management connections with bidirectional synchronization, universal schema mappings, and bounded read-only inspection.
+          </p>
         </div>
         <div className="integration-heading-actions">
           <button type="button" className="btn btn-secondary" onClick={() => openCreate("jira")}>Add Jira profile</button>
+          <button type="button" className="btn btn-secondary" onClick={() => openCreate("xray")}>Add Xray profile</button>
           <button type="button" className="btn btn-secondary" onClick={() => openCreate("qtest")}>Add qTest profile</button>
           <button type="button" className="btn btn-secondary" onClick={() => void onRefresh()}>Refresh</button>
         </div>
@@ -510,24 +726,52 @@ export default function IntegrationConnectionsPanel({
           </div>
           <div className="integration-form-grid">
             <label className="settings-label">System
-              <select className="settings-select" value={draft.system} onChange={(event) => {
-                const system = event.target.value as IntegrationSystem;
-                setDraft((current) => ({ ...current, system, auth_type: system === "jira" ? "basic_api_token" : "bearer_token" }));
-              }} disabled={Boolean(editingId)}>
+              <select
+                className="settings-select"
+                value={draft.system}
+                onChange={(event) => {
+                  const system = event.target.value as IntegrationSystem;
+                  const defaultAuth: IntegrationAuthType =
+                    system === "xray" ? "oauth2_client_credentials" : system === "jira" ? "basic_api_token" : "bearer_token";
+                  const defaultBaseUrl = system === "xray" ? "https://xray.cloud.getxray.app" : draft.base_url;
+                  setDraft((current) => ({
+                    ...current,
+                    system,
+                    auth_type: defaultAuth,
+                    base_url: defaultBaseUrl,
+                  }));
+                }}
+                disabled={Boolean(editingId)}
+              >
                 <option value="jira">Jira</option>
-                <option value="qtest">qTest</option>
+                <option value="xray">Xray Test Management</option>
+                <option value="qtest">Tricentis qTest</option>
+                <option value="github">GitHub</option>
+                <option value="gitlab">GitLab</option>
               </select>
             </label>
             <label className="settings-label">Profile name
               <input className="settings-input" value={draft.name} onChange={(event) => updateDraft("name", event.target.value)} required maxLength={120} />
             </label>
             <label className="settings-label integration-field-wide">Base URL
-              <input className="settings-input" type="url" value={draft.base_url} onChange={(event) => updateDraft("base_url", event.target.value)} placeholder="https://configured-host.example.com" required />
+              <input
+                className="settings-input"
+                type="url"
+                value={draft.base_url}
+                onChange={(event) => updateDraft("base_url", event.target.value)}
+                placeholder={draft.system === "xray" ? "https://xray.cloud.getxray.app" : "https://configured-host.example.com"}
+                required
+              />
             </label>
             {draft.system === "jira" ? (
               <label className="settings-label">Jira project key
                 <input className="settings-input" value={draft.project_key} onChange={(event) => updateDraft("project_key", event.target.value)} placeholder="From JIRA_PROJECT_KEY" required={!environmentConfiguration?.jira.filter_id} maxLength={120} />
                 {environmentConfiguration?.jira.filter_id ? <span className="settings-field-help">Optional when JIRA_FILTER_ID is configured in the backend environment.</span> : null}
+              </label>
+            ) : draft.system === "xray" ? (
+              <label className="settings-label">Xray project key
+                <input className="settings-input" value={draft.project_key} onChange={(event) => updateDraft("project_key", event.target.value)} placeholder="e.g. QA, PROJ" required maxLength={120} />
+                <span className="settings-field-help">Target Jira project key where Xray tests and executions reside.</span>
               </label>
             ) : (
               <>
@@ -541,12 +785,27 @@ export default function IntegrationConnectionsPanel({
             )}
             <label className="settings-label">Authentication
               <select className="settings-select" value={draft.auth_type} onChange={(event) => updateDraft("auth_type", event.target.value as IntegrationAuthType)}>
-                <option value="basic_api_token">Username and API token</option>
-                <option value="bearer_token">Bearer token</option>
-                <option value="api_token">API token</option>
+                {draft.system === "xray" ? (
+                  <>
+                    <option value="oauth2_client_credentials">OAuth2 Client Credentials (Xray Cloud)</option>
+                    <option value="bearer_token">Bearer Token / Personal Access Token (Server/DC)</option>
+                    <option value="basic_api_token">Basic Auth - Username & API Token (Server/DC)</option>
+                    <option value="api_token">API Token</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="basic_api_token">Username and API token</option>
+                    <option value="bearer_token">Bearer token</option>
+                    <option value="api_token">API token</option>
+                  </>
+                )}
               </select>
             </label>
-            {draft.auth_type === "basic_api_token" ? (
+            {draft.auth_type === "oauth2_client_credentials" ? (
+              <label className="settings-label">Client ID
+                <input className="settings-input" value={draft.username} onChange={(event) => updateDraft("username", event.target.value)} placeholder="Xray Cloud Client ID" required />
+              </label>
+            ) : draft.auth_type === "basic_api_token" ? (
               <label className="settings-label">Username or email
                 <input className="settings-input" type="email" value={draft.username} onChange={(event) => updateDraft("username", event.target.value)} required />
               </label>
@@ -555,17 +814,38 @@ export default function IntegrationConnectionsPanel({
               <input className="settings-input" value={draft.environment} onChange={(event) => updateDraft("environment", event.target.value)} placeholder="From environment configuration" maxLength={120} />
             </label>
             <label className="settings-label">Secret reference
-              <input className="settings-input" value={draft.secret_ref ?? ""} onChange={(event) => {
-                const secretRef = event.target.value;
-                setDraft((current) => ({ ...current, secret_ref: secretRef, ...(secretRef.trim() ? { credential: "" } : {}) }));
-              }} placeholder="JIRA_API_TOKEN" pattern="[A-Z][A-Z0-9_]{1,159}" />
+              <input
+                className="settings-input"
+                value={draft.secret_ref ?? ""}
+                onChange={(event) => {
+                  const secretRef = event.target.value;
+                  setDraft((current) => ({ ...current, secret_ref: secretRef, ...(secretRef.trim() ? { credential: "" } : {}) }));
+                }}
+                placeholder={draft.system === "xray" ? "XRAY_CLIENT_SECRET" : "JIRA_API_TOKEN"}
+                pattern="[A-Z][A-Z0-9_]{1,159}"
+              />
               <span className="settings-field-help">Use this instead of entering a token when env/Vault is configured. Entering a credential clears this field.</span>
             </label>
-            <label className="settings-label">{editingId ? "Replace credential" : "Credential"}
-              <input className="settings-input" type="password" value={draft.credential ?? ""} onChange={(event) => {
-                const credential = event.target.value;
-                setDraft((current) => ({ ...current, credential, ...(credential.trim() ? { secret_ref: "" } : {}) }));
-              }} placeholder={editingId ? "Leave blank to keep current credential" : "Enter token"} required={!editingId && !draft.secret_ref} autoComplete="new-password" />
+            <label className="settings-label">
+              {editingId
+                ? "Replace credential"
+                : draft.auth_type === "oauth2_client_credentials"
+                ? "Client Secret"
+                : draft.auth_type === "bearer_token"
+                ? "Bearer Token"
+                : "Credential"}
+              <input
+                className="settings-input"
+                type="password"
+                value={draft.credential ?? ""}
+                onChange={(event) => {
+                  const credential = event.target.value;
+                  setDraft((current) => ({ ...current, credential, ...(credential.trim() ? { secret_ref: "" } : {}) }));
+                }}
+                placeholder={editingId ? "Leave blank to keep current credential" : "Enter secret/token"}
+                required={!editingId && !draft.secret_ref}
+                autoComplete="new-password"
+              />
               <span className="settings-field-help">The value is write-only and will be masked after save. Entering a credential clears the secret reference.</span>
             </label>
           </div>
@@ -575,6 +855,7 @@ export default function IntegrationConnectionsPanel({
         </form>
       ) : null}
 
+      {/* Connection Profiles Table */}
       <div className="integration-profile-table-wrap">
         <table className="integration-profile-table">
           <thead>
@@ -582,17 +863,38 @@ export default function IntegrationConnectionsPanel({
           </thead>
           <tbody>
             {connections.length === 0 ? (
-              <tr><td colSpan={6}><div className="integration-empty-state"><strong>No connector profiles yet</strong><span>Add a Jira or qTest profile to begin read-only validation.</span></div></td></tr>
+              <tr><td colSpan={6}><div className="integration-empty-state"><strong>No connector profiles yet</strong><span>Add a Jira, Xray, or qTest profile to begin test management synchronization.</span></div></td></tr>
             ) : connections.map((connection) => (
               <tr key={connection.id}>
-                <td><span className={`integration-system-badge ${connection.system}`}>{connection.system === "jira" ? "Jira" : "qTest"}</span></td>
+                <td>
+                  <span className={`integration-system-badge ${connection.system}`}>
+                    {connection.system === "xray" ? "Xray" : connection.system === "jira" ? "Jira" : connection.system === "qtest" ? "qTest" : connection.system.toUpperCase()}
+                  </span>
+                </td>
                 <td><strong>{connection.name}</strong><span className="integration-muted">{connection.base_url}</span></td>
-                <td>{connection.system === "jira" ? connection.project_key || (connection.environment_backed && environmentConfiguration?.jira.filter_id ? `Filter ${environmentConfiguration.jira.filter_id}` : "Not set") : connection.project_id || connection.project_name || "Not set"}</td>
-                <td><span className={`integration-status ${connection.status}`}><span className="integration-status-dot" />{statusLabel(connection.status)}</span><span className="integration-muted">{connection.environment_backed ? "Environment-backed · GET only" : connection.credential_configured ? "Credential configured" : "Credential missing"}</span></td>
+                <td>
+                  {connection.system === "jira"
+                    ? connection.project_key || (connection.environment_backed && environmentConfiguration?.jira.filter_id ? `Filter ${environmentConfiguration.jira.filter_id}` : "Not set")
+                    : connection.system === "xray"
+                    ? connection.project_key || "Not set"
+                    : connection.project_id || connection.project_name || "Not set"}
+                </td>
+                <td>
+                  <span className={`integration-status ${connection.status}`}>
+                    <span className="integration-status-dot" />{statusLabel(connection.status)}
+                  </span>
+                  <span className="integration-muted">{connection.environment_backed ? "Environment-backed · GET only" : connection.credential_configured ? "Credential configured" : "Credential missing"}</span>
+                </td>
                 <td><span>{formatDate(connection.last_tested_at)}</span><span className="integration-muted">{connection.last_test_latency_ms ? `${Math.round(connection.last_test_latency_ms)} ms` : ""}</span></td>
                 <td>
                   <div className="integration-row-actions">
                     <button type="button" className="btn btn-secondary" onClick={() => void handleTest(connection)} disabled={workingId === connection.id}>Test</button>
+                    {onSync ? (
+                      <button type="button" className="btn btn-secondary" onClick={() => openSyncModal(connection)} disabled={workingId === connection.id}>Sync</button>
+                    ) : null}
+                    {onLoadMappings ? (
+                      <button type="button" className="btn btn-secondary" onClick={() => void openMappingsModal(connection)} disabled={workingId === connection.id}>Mappings</button>
+                    ) : null}
                     {connection.environment_backed ? <span className="integration-readonly-badge">Environment controlled</span> : (
                       <>
                         <button type="button" className="btn btn-secondary" onClick={() => void handleToggle(connection)} disabled={workingId === connection.id}>{connection.status === "active" ? "Deactivate" : "Activate"}</button>
@@ -608,12 +910,290 @@ export default function IntegrationConnectionsPanel({
         </table>
       </div>
 
+      {/* Bidirectional Sync Drawer / Modal */}
+      {syncModalConnection ? (
+        <div className="integration-sync-panel" role="region" aria-label="Bidirectional synchronization">
+          <div className="integration-section-heading compact">
+            <div>
+              <p className="integration-eyebrow">Universal Sync Engine</p>
+              <h3>Bidirectional Sync — {syncModalConnection.system.toUpperCase()}: {syncModalConnection.name}</h3>
+              <p className="settings-field-help">Synchronize test artifacts between SkyWatch Universal Quality Model and external test management systems.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={closeSyncModal} disabled={syncing}>Close</button>
+          </div>
+
+          <div className="integration-sync-grid">
+            <label className="settings-label">Sync Direction
+              <select className="settings-select" value={syncDirection} onChange={(e) => setSyncDirection(e.target.value as SyncDirection)}>
+                <option value="bidirectional">Bidirectional (Two-way Synchronization)</option>
+                <option value="import_to_skywatch">Import to SkyWatch (External → SkyWatch)</option>
+                <option value="export_to_external">Export to External (SkyWatch → External)</option>
+              </select>
+            </label>
+
+            <label className="settings-label">Conflict Resolution Policy
+              <select className="settings-select" value={syncConflictPolicy} onChange={(e) => setSyncConflictPolicy(e.target.value as SyncConflictPolicy)}>
+                <option value="external_wins">External Wins (External ALM is Source of Truth)</option>
+                <option value="skywatch_wins">SkyWatch Wins (SkyWatch is Source of Truth)</option>
+                <option value="manual_review">Manual Review (Flag for Inspection)</option>
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <span className="settings-field-help" style={{ fontWeight: 600, display: "block", marginBottom: "4px" }}>Entity Types to Sync</span>
+            <div className="integration-checkbox-row">
+              {[
+                { id: "test_case", label: "Test Cases" },
+                { id: "test_execution", label: "Test Executions / Results" },
+                { id: "test_plan", label: "Test Plans" },
+                { id: "test_run", label: "Test Runs / Sets" },
+              ].map((entity) => (
+                <label className="integration-checkbox-item" key={entity.id}>
+                  <input
+                    type="checkbox"
+                    checked={syncEntityTypes.includes(entity.id)}
+                    onChange={() => toggleEntityType(entity.id)}
+                    disabled={syncing}
+                  />
+                  {entity.label}
+                </label>
+              ))}
+              <label className="integration-checkbox-item" style={{ marginLeft: "16px" }}>
+                <input
+                  type="checkbox"
+                  checked={syncDryRun}
+                  onChange={(e) => setSyncDryRun(e.target.checked)}
+                  disabled={syncing}
+                />
+                Dry Run (Simulate without committing mutations)
+              </label>
+            </div>
+          </div>
+
+          <div className="integration-form-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void handleExecuteSync()}
+              disabled={syncing || syncEntityTypes.length === 0}
+            >
+              {syncing ? "Running Synchronization..." : "Execute Sync"}
+            </button>
+          </div>
+
+          {syncError ? <div className="integration-inline-error">{syncError}</div> : null}
+
+          {syncResult ? (
+            <div className="integration-sync-results" aria-live="polite">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <strong>Sync Job {syncResult.job_id}</strong>
+                  <span className="integration-muted" style={{ marginLeft: "8px" }}>Direction: {syncResult.direction}</span>
+                </div>
+                <span className={`integration-badge-pill ${syncResult.status}`}>
+                  {syncResult.status}
+                </span>
+              </div>
+
+              <div className="integration-stats-grid">
+                <div className="integration-stat-card">
+                  <span className="integration-stat-value success">{syncResult.entities_synced}</span>
+                  <span className="integration-stat-label">Entities Synced</span>
+                </div>
+                <div className="integration-stat-card">
+                  <span className={`integration-stat-value ${syncResult.entities_failed > 0 ? "error" : ""}`}>{syncResult.entities_failed}</span>
+                  <span className="integration-stat-label">Entities Failed</span>
+                </div>
+                <div className="integration-stat-card">
+                  <span className={`integration-stat-value ${syncResult.conflicts_detected > 0 ? "warning" : ""}`}>{syncResult.conflicts_detected}</span>
+                  <span className="integration-stat-label">Conflicts</span>
+                </div>
+                <div className="integration-stat-card">
+                  <span className="integration-stat-value">{syncResult.duration_ms ? `${Math.round(syncResult.duration_ms)} ms` : "N/A"}</span>
+                  <span className="integration-stat-label">Duration</span>
+                </div>
+              </div>
+
+              {syncResult.error_details && syncResult.error_details.length > 0 ? (
+                <div style={{ marginTop: "12px" }}>
+                  <span className="settings-field-help" style={{ color: "var(--error-dark)", fontWeight: 600 }}>Sync Failure Details:</span>
+                  <ul style={{ margin: "4px 0", paddingLeft: "20px", fontSize: "var(--font-caption)", color: "var(--text-secondary)" }}>
+                    {syncResult.error_details.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Field & Status Mappings Modal */}
+      {mappingsModalConnection ? (
+        <div className="integration-mapping-panel" role="region" aria-label="Field and Status Mappings">
+          <div className="integration-section-heading compact">
+            <div>
+              <p className="integration-eyebrow">Universal Schema Mappings</p>
+              <h3>Field & Status Mappings — {mappingsModalConnection.system.toUpperCase()}: {mappingsModalConnection.name}</h3>
+              <p className="settings-field-help">Configure field transformation rules and status mappings between {mappingsModalConnection.system.toUpperCase()} and SkyWatch.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={closeMappingsModal} disabled={mappingsSaving}>Close</button>
+          </div>
+
+          {mappingsNotice ? (
+            <div className={`settings-alert ${mappingsNotice.tone === "success" ? "success" : "error"}`} role="status">
+              {mappingsNotice.text}
+            </div>
+          ) : null}
+
+          {mappingsLoading ? (
+            <div className="integration-empty-state">Loading mappings...</div>
+          ) : mappingsData ? (
+            <div>
+              <div className="integration-mapping-tabs">
+                <button
+                  type="button"
+                  className={`integration-mapping-tab ${mappingsActiveTab === "fields" ? "active" : ""}`}
+                  onClick={() => setMappingsActiveTab("fields")}
+                >
+                  Field Mappings ({mappingsData.field_mappings.length})
+                </button>
+                <button
+                  type="button"
+                  className={`integration-mapping-tab ${mappingsActiveTab === "statuses" ? "active" : ""}`}
+                  onClick={() => setMappingsActiveTab("statuses")}
+                >
+                  Status Mappings ({mappingsData.status_mappings.length})
+                </button>
+              </div>
+
+              {mappingsActiveTab === "fields" ? (
+                <div style={{ marginTop: "12px" }}>
+                  <table className="integration-mapping-table">
+                    <thead>
+                      <tr>
+                        <th>Source Field ({mappingsModalConnection.system})</th>
+                        <th>Target Canonical Field (SkyWatch)</th>
+                        <th>Transform Rule</th>
+                        <th>Default Value</th>
+                        <th style={{ width: "80px" }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mappingsData.field_mappings.map((rule, idx) => (
+                        <tr key={idx}>
+                          <td><code>{rule.source_field}</code></td>
+                          <td><code>{rule.target_canonical_field}</code></td>
+                          <td><span>{rule.transform || "identity"}</span></td>
+                          <td><span>{rule.default_value !== undefined ? String(rule.default_value) : "—"}</span></td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "2px 6px", fontSize: "11px" }}
+                              onClick={() => removeFieldMappingRule(idx)}
+                              disabled={mappingsSaving}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="integration-mapping-form-row">
+                    <label className="settings-label">Source Field
+                      <input className="settings-input" value={newSourceField} onChange={(e) => setNewSourceField(e.target.value)} placeholder="e.g. summary, steps" />
+                    </label>
+                    <label className="settings-label">Target Canonical Field
+                      <input className="settings-input" value={newTargetCanonicalField} onChange={(e) => setNewTargetCanonicalField(e.target.value)} placeholder="e.g. title, steps" />
+                    </label>
+                    <label className="settings-label">Transform
+                      <select className="settings-select" value={newTransform} onChange={(e) => setNewTransform(e.target.value)}>
+                        <option value="identity">identity</option>
+                        <option value="uppercase">uppercase</option>
+                        <option value="lowercase">lowercase</option>
+                        <option value="trim">trim</option>
+                      </select>
+                    </label>
+                    <label className="settings-label">Default Value
+                      <input className="settings-input" value={newDefaultValue} onChange={(e) => setNewDefaultValue(e.target.value)} placeholder="Optional default" />
+                    </label>
+                    <button type="button" className="btn btn-secondary" onClick={addFieldMappingRule} disabled={!newSourceField.trim() || !newTargetCanonicalField.trim()}>
+                      Add Rule
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: "12px" }}>
+                  <table className="integration-mapping-table">
+                    <thead>
+                      <tr>
+                        <th>Source Status ({mappingsModalConnection.system})</th>
+                        <th>Target Canonical Status (SkyWatch)</th>
+                        <th style={{ width: "80px" }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mappingsData.status_mappings.map((rule, idx) => (
+                        <tr key={idx}>
+                          <td><code>{rule.source_status}</code></td>
+                          <td><code>{rule.target_canonical_status}</code></td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "2px 6px", fontSize: "11px" }}
+                              onClick={() => removeStatusMappingRule(idx)}
+                              disabled={mappingsSaving}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="integration-mapping-form-row">
+                    <label className="settings-label">Source Status
+                      <input className="settings-input" value={newSourceStatus} onChange={(e) => setNewSourceStatus(e.target.value)} placeholder="e.g. PASSED, FAILED, TODO" />
+                    </label>
+                    <label className="settings-label">Target Canonical Status
+                      <input className="settings-input" value={newTargetCanonicalStatus} onChange={(e) => setNewTargetCanonicalStatus(e.target.value)} placeholder="e.g. passed, failed, pending" />
+                    </label>
+                    <button type="button" className="btn btn-secondary" onClick={addStatusMappingRule} disabled={!newSourceStatus.trim() || !newTargetCanonicalStatus.trim()}>
+                      Add Rule
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="integration-form-actions" style={{ marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void handleSaveMappings()}
+                  disabled={mappingsSaving}
+                >
+                  {mappingsSaving ? "Saving Mappings..." : "Save Mappings"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Read-Only Asset Viewer */}
       <div className="integration-read-panel">
         <div className="integration-section-heading compact">
           <div>
-            <p className="integration-eyebrow">No synchronization</p>
+            <p className="integration-eyebrow">Enterprise asset inspection</p>
             <h3>Read-only external metadata</h3>
-            <p className="settings-field-help">These views retrieve bounded records for review and AI context. They cannot change Jira or qTest.</p>
+            <p className="settings-field-help">These views retrieve bounded records for review and AI context from Jira, Xray, or qTest.</p>
           </div>
         </div>
         <div className="integration-read-controls">
@@ -625,7 +1205,12 @@ export default function IntegrationConnectionsPanel({
           </label>
           <label className="settings-label">Asset type
             <select className="settings-select" value={assetType} onChange={(event) => setAssetType(event.target.value as IntegrationAssetType)}>
-              {(selectedAssetConnection?.system === "jira" ? ["requirements"] : ["metadata", "requirements", "modules", "releases", "cycles", "test_suites", "test_cases", "test_runs", "test_logs"]).map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
+              {(selectedAssetConnection?.system === "jira"
+                ? ["requirements"]
+                : selectedAssetConnection?.system === "xray"
+                ? ["test_cases", "metadata"]
+                : ["metadata", "requirements", "modules", "releases", "cycles", "test_suites", "test_cases", "test_runs", "test_logs"]
+              ).map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
             </select>
           </label>
           <button type="button" className="btn btn-primary" onClick={() => void handleLoadAssets()} disabled={!assetConnectionId || assetLoading}>{assetLoading ? "Loading..." : "Load read-only data"}</button>

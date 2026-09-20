@@ -180,7 +180,11 @@ class EnterpriseToolRegistry:
         self.register(_JiraIntegrationTool())
         # 8. qTest ALM Integration Tool
         self.register(_QTestIntegrationTool())
-        # 9. Multi-Environment Execution Tool
+        # 9. Xray Enterprise ALM Integration Tool
+        self.register(_XrayIntegrationTool())
+        # 10. Bidirectional ALM Synchronization Engine Tool
+        self.register(_SyncEngineTool())
+        # 11. Multi-Environment Execution Tool
         self.register(_MultiEnvironmentExecutionTool())
 
 
@@ -448,6 +452,78 @@ class _QTestIntegrationTool(EnterpriseTool):
             tool_id=self.descriptor.tool_id,
             success=True,
             data={"status": "synchronized", "action": arguments.get("action")},
+        )
+
+
+class _XrayIntegrationTool(EnterpriseTool):
+    """Tool wrapping Xray Cloud and Server REST/GraphQL test management."""
+
+    @property
+    def descriptor(self) -> EnterpriseToolDescriptor:
+        return EnterpriseToolDescriptor(
+            tool_id="tool.alm.xray",
+            name="Xray ALM Adapter",
+            description="Manages tests, test plans, test sets, executions, and result imports in Xray Cloud & Server.",
+            capability=PlatformCapability.DEFECT_CREATION,
+            version="1.0.0",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["create_test", "get_test", "create_plan", "import_results", "link_defect"]},
+                    "project_key": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "description": {"type": "string"},
+                    "test_key": {"type": "string"},
+                    "plan_key": {"type": "string"},
+                    "results": {"type": "array"},
+                },
+                "required": ["action"],
+            },
+            permissions=["test:manage", "defect:create"],
+            auth_requirements=["XRAY_CLIENT_ID", "XRAY_CLIENT_SECRET"],
+        )
+
+    async def execute(self, call_id: str = "", **arguments: Any) -> ToolExecutionResponse:
+        action = arguments.get("action")
+        return ToolExecutionResponse(
+            call_id=call_id,
+            tool_id=self.descriptor.tool_id,
+            success=True,
+            data={"status": "executed", "action": action, "system": "xray"},
+        )
+
+
+class _SyncEngineTool(EnterpriseTool):
+    """Tool wrapping the unified bidirectional ALM synchronization engine."""
+
+    @property
+    def descriptor(self) -> EnterpriseToolDescriptor:
+        return EnterpriseToolDescriptor(
+            tool_id="tool.alm.sync",
+            name="Bidirectional ALM Sync Engine",
+            description="Executes incremental or full synchronization between SkyWatch and external ALM platforms (Xray, Jira, qTest) with conflict resolution.",
+            capability=PlatformCapability.TEST_EXECUTION,
+            version="1.0.0",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "connection_id": {"type": "integer"},
+                    "system": {"type": "string", "enum": ["xray", "jira", "qtest"]},
+                    "sync_type": {"type": "string", "enum": ["incremental", "full", "dry_run"]},
+                    "conflict_policy": {"type": "string", "enum": ["latest_timestamp", "skywatch_authoritative", "external_authoritative", "manual"]},
+                },
+                "required": ["connection_id"],
+            },
+            permissions=["sync:execute"],
+        )
+
+    async def execute(self, call_id: str = "", **arguments: Any) -> ToolExecutionResponse:
+        connection_id = arguments.get("connection_id", 0)
+        return ToolExecutionResponse(
+            call_id=call_id,
+            tool_id=self.descriptor.tool_id,
+            success=True,
+            data={"status": "completed", "connection_id": connection_id, "synced_items": 0},
         )
 
 

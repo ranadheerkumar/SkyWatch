@@ -21,6 +21,7 @@ from app.schemas.universal_quality_model import (
     CanonicalTestCase,
     CanonicalTestExecution,
     CanonicalTestRun,
+    CanonicalTestSet,
     CanonicalTestStep,
     DefectSeverity,
     DefectStatus,
@@ -99,6 +100,76 @@ class TestUniversalQualityModel(unittest.TestCase):
         self.assertEqual(case.id, "case-qtest-98765")
         self.assertEqual(case.title, "Search for agricultural products")
         self.assertEqual(len(case.steps), 2)
+
+    def test_canonical_test_set_creation(self) -> None:
+        test_set = CanonicalTestSet(
+            id="set-101",
+            project_id="proj-1",
+            name="Smoke Regression Suite",
+            description="High priority smoke regression tests",
+            case_ids=["case-1", "case-2", "case-3"],
+            environment="staging",
+        )
+        self.assertEqual(test_set.id, "set-101")
+        self.assertEqual(len(test_set.case_ids), 3)
+
+    def test_xray_test_to_canonical_test_case(self) -> None:
+        xray_payload = {
+            "key": "QA-1001",
+            "summary": "Verify Multi-Factor Authentication prompt",
+            "description": "Ensure OTP modal renders upon valid credentials.",
+            "testType": "Manual",
+            "steps": [
+                {"action": "Submit username and password", "result": "OTP modal rendered"},
+                {"action": "Enter 6-digit OTP code", "result": "Dashboard rendered"},
+            ],
+            "status": "ready",
+        }
+        case = UniversalModelAdapter.xray_test_to_canonical_test_case(xray_payload, app_id="app-sec")
+        self.assertEqual(case.id, "case-xray-QA-1001")
+        self.assertEqual(case.title, "Verify Multi-Factor Authentication prompt")
+        self.assertEqual(len(case.steps), 2)
+        self.assertEqual(case.status, "ready")
+
+    def test_canonical_test_case_to_xray_payload(self) -> None:
+        case = CanonicalTestCase(
+            id="case-200",
+            application_id="app-1",
+            title="Checkout cart total calculation",
+            description="Verify taxes and discounts are applied",
+            steps=[
+                CanonicalTestStep(step_number=1, action="Add items to cart", expected_result="Cart badge shows 2"),
+                CanonicalTestStep(step_number=2, action="Proceed to checkout", expected_result="Tax line added", is_assertion=True),
+            ],
+        )
+        xray = UniversalModelAdapter.canonical_test_case_to_xray_payload(case, project_key="FIN")
+        self.assertEqual(xray["fields"]["project"]["key"], "FIN")
+        self.assertEqual(xray["fields"]["summary"], case.title)
+        self.assertEqual(len(xray["xrayFields"]["steps"]), 2)
+        self.assertEqual(xray["xrayFields"]["steps"][0]["action"], "Add items to cart")
+
+    def test_canonical_execution_to_xray_result(self) -> None:
+        execution = CanonicalTestExecution(
+            id="exec-55",
+            run_id="run-1",
+            case_id="case-xray-QA-1001",
+            status=ExecutionStatus.PASSED,
+            duration_ms=1250,
+        )
+        result = UniversalModelAdapter.canonical_execution_to_xray_result(execution, test_key="QA-1001")
+        self.assertEqual(result["testKey"], "QA-1001")
+        self.assertEqual(result["status"], "PASSED")
+
+    def test_xray_test_plan_to_canonical(self) -> None:
+        plan_payload = {
+            "key": "QA-P1",
+            "summary": "Release 2.7 Quality Gate Plan",
+            "description": "Validation for v2.7 release candidate",
+        }
+        plan = UniversalModelAdapter.xray_test_plan_to_canonical(plan_payload, project_id="proj-1")
+        self.assertEqual(plan.id, "plan-xray-QA-P1")
+        self.assertEqual(plan.name, "Release 2.7 Quality Gate Plan")
+        self.assertEqual(plan.project_id, "proj-1")
 
 
 if __name__ == "__main__":

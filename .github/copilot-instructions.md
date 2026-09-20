@@ -194,5 +194,14 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - Canonical Execution Contract: `CanonicalExecutionRequest` and `CanonicalExecutionResult` normalize all test execution across Local, Sauce Labs, LambdaTest, Docker, Azure Container Apps, GCP Cloud Run, and AWS ECS Fargate.
   - Dynamic Agentic Provider Selection: `CapabilityOrchestrator.select_execution_provider()` dynamically evaluates testing objectives, real-device requirements (e.g. iPad Safari), and cloud availability to assign optimal providers with automatic fallback to local emulation.
   - Standardized Execution Dispatcher Tool: Registered under `tool.execution.dispatcher` in the enterprise tool registry with full artifact normalization.
+- Unified Enterprise Test Management Architecture (`backend/app/services/test_management/`):
+  - Test Management Provider Abstraction: `TestManagementProvider` establishes a single reusable, platform-neutral contract for all ALM systems (Xray, Jira, Tricentis qTest) covering Test Cases, Test Plans, Test Sets, Runs, Executions, Defects, Requirements, Releases, and Evidence.
+  - Xray Enterprise Provider (`XrayProvider` & `XrayClient`): Full support for Xray Cloud (OAuth2 Client Credentials, GraphQL, and REST v2) and Xray Server/Data Center (Raven API v1.0). Handles Test Cases, Test Plans, Test Sets, Result Imports, Defect Linkage, and Evidence Attachments.
+  - Jira Native Quality Provider (`JiraProvider`): Test case specification via Jira tasks/tests with ADF formatting, workflow transitions, components, releases/versions, and defect linking.
+  - Tricentis qTest Provider (`QTestProvider`): Full test design module mapping, test cases, test suites, test cycles, test runs, automated test logs, and defect submission.
+  - Central Test Management Registry (`TestManagementRegistry`): Singleton registry mapping systems (`xray`, `jira`, `qtest`) to providers with capability advertising.
+  - One Unified Bidirectional Sync Engine (`SyncEngine`): Incremental sync, checkpoints, idempotency, bounded batching, and configurable conflict policies (`external_wins`, `skywatch_wins`, `manual_review`).
+  - Enterprise Tool Registry: Registered `tool.alm.xray` for autonomous agent interactions with Xray Cloud and Server, and `tool.alm.sync` for agentic test management synchronization.
+
 
 

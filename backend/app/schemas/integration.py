@@ -7,9 +7,9 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 from app.core.config import settings
 
 
-IntegrationSystem = Literal["jira", "qtest"]
+IntegrationSystem = Literal["jira", "xray", "qtest", "github", "gitlab"]
 ConnectionStatus = Literal["untested", "active", "inactive", "error"]
-AuthType = Literal["api_token", "basic_api_token", "bearer_token"]
+AuthType = Literal["api_token", "basic_api_token", "bearer_token", "oauth2_client_credentials"]
 
 
 class IntegrationConnectionCreate(BaseModel):
@@ -44,6 +44,8 @@ class IntegrationConnectionCreate(BaseModel):
     def validate_project_requirements(self) -> "IntegrationConnectionCreate":
         if self.system == "jira" and not self.project_key and not settings.JIRA_FILTER_ID.isdigit():
             raise ValueError("Jira project key or numeric JIRA_FILTER_ID is required")
+        if self.system == "xray" and not self.project_key:
+            raise ValueError("Xray project key is required")
         if self.system == "qtest" and not (self.project_id or self.project_name):
             raise ValueError("qTest project ID or project name is required")
         if self.auth_type == "basic_api_token" and not self.username:
@@ -304,3 +306,72 @@ class IntegrationWebhookPayload(BaseModel):
     issue_key: str | None = None
     project_key: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+# ============================================================================
+# Xray, Field Mapping & Bidirectional Sync Schemas
+# ============================================================================
+
+class XrayTestCreateRequest(BaseModel):
+    project_key: str = Field(min_length=1, max_length=120)
+    summary: str = Field(min_length=1, max_length=500)
+    description: str = Field(default="", max_length=30000)
+    test_type: str = Field(default="Manual", max_length=60)
+    steps: list[dict[str, str]] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+
+
+class XrayTestPlanCreateRequest(BaseModel):
+    project_key: str = Field(min_length=1, max_length=120)
+    summary: str = Field(min_length=1, max_length=500)
+    description: str = Field(default="", max_length=30000)
+    test_keys: list[str] = Field(default_factory=list)
+
+
+class XrayExecutionImportRequest(BaseModel):
+    info: dict[str, Any] = Field(default_factory=dict)
+    tests: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class FieldMappingRule(BaseModel):
+    source_field: str = Field(min_length=1, max_length=120)
+    target_field: str = Field(min_length=1, max_length=120)
+    direction: Literal["import", "export", "bidirectional"] = "bidirectional"
+    transform: str | None = Field(default=None, max_length=120)
+
+
+class FieldMappingConfiguration(BaseModel):
+    rules: list[FieldMappingRule] = Field(default_factory=list)
+
+
+class StatusMappingRule(BaseModel):
+    skywatch_status: str = Field(min_length=1, max_length=60)
+    external_status: str = Field(min_length=1, max_length=120)
+
+
+class StatusMappingConfiguration(BaseModel):
+    rules: list[StatusMappingRule] = Field(default_factory=list)
+
+
+class SyncExecutionRequest(BaseModel):
+    sync_type: Literal["incremental", "full", "dry_run"] = "incremental"
+    entities: list[Literal["test_cases", "test_plans", "defects", "results", "requirements"]] = Field(
+        default_factory=lambda: ["test_cases", "defects", "results"]
+    )
+    conflict_policy: Literal["skywatch_authoritative", "external_authoritative", "latest_timestamp", "manual"] = "latest_timestamp"
+    dry_run: bool = False
+
+
+class SyncExecutionResponse(BaseModel):
+    job_id: str
+    connection_id: int
+    system: str
+    status: str
+    total_items: int = 0
+    synced_items: int = 0
+    failed_items: int = 0
+    skipped_items: int = 0
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+    duration_ms: float = 0.0
+    checkpoint: str | None = None
+

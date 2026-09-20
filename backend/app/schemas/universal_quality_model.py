@@ -51,6 +51,24 @@ class DefectStatus(str, Enum):
     REOPENED = "REOPENED"
 
 
+class SyncConflictPolicy(str, Enum):
+    """Conflict resolution policy for bidirectional synchronization."""
+    SKYWATCH_AUTHORITATIVE = "skywatch_authoritative"
+    EXTERNAL_AUTHORITATIVE = "external_authoritative"
+    LATEST_TIMESTAMP = "latest_timestamp"
+    MANUAL = "manual"
+
+
+class SyncJobStatus(str, Enum):
+    """Operational status of a synchronization or batch transfer job."""
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    PARTIALLY_COMPLETED = "PARTIALLY_COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
 # ==============================================================================
 # Canonical Enterprise Quality Domain Models
 # ==============================================================================
@@ -175,6 +193,17 @@ class CanonicalTestPlan(BaseModel):
     target_date: datetime | None = None
 
 
+class CanonicalTestSet(BaseModel):
+    """Platform-neutral test set grouping canonical test cases for execution."""
+    id: str
+    project_id: str
+    name: str
+    description: str | None = None
+    case_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class CanonicalAttachment(BaseModel):
     """Evidence artifact attached to a test execution or defect."""
     id: str
@@ -255,6 +284,22 @@ class CanonicalReport(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
     quality_score: float = 100.0
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ExternalObjectMapping(BaseModel):
+    """Canonical mapping link tracking SkyWatch domain objects against external ALM systems."""
+    id: str
+    provider: str  # jira, xray, qtest, github
+    integration_id: int
+    project_id: str
+    skywatch_object_type: str  # test_case, test_plan, test_set, execution, defect, requirement
+    skywatch_object_id: str
+    external_object_id: str
+    external_key: str
+    last_synced_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    sync_version: int = 1
+    mapping_status: str = "synced"  # synced, modified, conflict, failed
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ==============================================================================
@@ -353,3 +398,98 @@ class UniversalModelAdapter:
             "branch": git_data.get("branch", "develop"),
             "timestamp": git_data.get("timestamp", datetime.now(timezone.utc).isoformat()),
         }
+
+    @staticmethod
+    def xray_test_to_canonical_test_case(xray_data: dict[str, Any], app_id: str) -> CanonicalTestCase:
+        """Translate an Xray Test entity (Cloud or Server) into a CanonicalTestCase."""
+        test_key = xray_data.get("key") or xray_data.get("testKey", "XRAY-TEST-0")
+        summary = xray_data.get("summary") or (xray_data.get("fields", {}).get("summary", f"Xray Test {test_key}"))
+        description = xray_data.get("description") or (xray_data.get("fields", {}).get("description", ""))
+        if isinstance(description, dict):
+            description = description.get("text", "") or str(description)
+
+        raw_steps = xray_data.get("steps") or xray_data.get("testSteps") or []
+        canonical_steps = []
+        for idx, step in enumerate(raw_steps, start=1):
+            action_text = step.get("action") or step.get("step") or step.get("description", "Execute test action")
+            expected_text = step.get("result") or step.get("expectedResult") or "Expected outcome verified"
+            canonical_steps.append(
+                CanonicalTestStep(
+                    step_number=idx,
+                    action=str(action_text),
+                    expected_result=str(expected_text),
+                )
+            )
+
+        status_raw = xray_data.get("status") or xray_data.get("fields", {}).get("status", {}).get("name", "ready")
+        return CanonicalTestCase(
+            id=f"case-xray-{test_key}",
+            application_id=app_id,
+            title=summary,
+            description=description,
+            steps=canonical_steps,
+            status="ready" if str(status_raw).lower() in ("pass", "passed", "ready", "approved") else "draft",
+        )
+
+    @staticmethod
+    def canonical_test_case_to_xray_payload(case: CanonicalTestCase, project_key: str) -> dict[str, Any]:
+        """Translate a CanonicalTestCase into an Xray Test issue creation payload."""
+        steps_payload = []
+        for step in case.steps:
+            steps_payload.append({
+                "action": step.action,
+                "data": step.value or "",
+                "result": step.expected_result,
+            })
+        return {
+            "fields": {
+                "project": {"key": project_key},
+                "summary": case.title,
+                "description": case.description or "",
+                "issuetype": {"name": "Test"},
+            },
+            "xrayFields": {
+                "testType": {"name": "Manual"},
+                "steps": steps_payload,
+            },
+        }
+
+    @staticmethod
+    def canonical_execution_to_xray_result(execution: CanonicalTestExecution, test_key: str) -> dict[str, Any]:
+        """Translate a CanonicalTestExecution into Xray standard execution JSON result."""
+        status_map = {
+            ExecutionStatus.PASSED: "PASSED",
+            ExecutionStatus.FAILED: "FAILED",
+            ExecutionStatus.BROKEN: "FAILED",
+            ExecutionStatus.SKIPPED: "SKIPPED",
+            ExecutionStatus.BLOCKED: "BLOCKED",
+            ExecutionStatus.IN_PROGRESS: "EXECUTING",
+        }
+        step_results = []
+        for r in execution.results:
+            step_results.append({
+                "status": status_map.get(r.status, "FAILED"),
+                "comment": r.error_message or "Verified successfully",
+                "actualResult": "Passed" if r.status == ExecutionStatus.PASSED else (r.error_message or "Failed"),
+            })
+        return {
+            "testKey": test_key,
+            "status": status_map.get(execution.status, "FAILED"),
+            "start": execution.started_at.isoformat(),
+            "finish": (execution.finished_at or datetime.now(timezone.utc)).isoformat(),
+            "steps": step_results,
+        }
+
+    @staticmethod
+    def xray_test_plan_to_canonical(xray_plan: dict[str, Any], project_id: str) -> CanonicalTestPlan:
+        """Translate an Xray Test Plan issue into a CanonicalTestPlan."""
+        plan_key = xray_plan.get("key", "PLAN-0")
+        summary = xray_plan.get("summary") or xray_plan.get("fields", {}).get("summary", f"Test Plan {plan_key}")
+        description = xray_plan.get("description") or xray_plan.get("fields", {}).get("description", "")
+        return CanonicalTestPlan(
+            id=f"plan-xray-{plan_key}",
+            project_id=project_id,
+            name=summary,
+            objective=str(description),
+        )
+

@@ -1,6 +1,37 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.6.1`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.7.0`.
+
+## [2.7.0] - 2026-09-20
+
+### Added
+- **Unified Test Management Architecture (`backend/app/services/test_management/`)**:
+  - Implemented `TestManagementProvider` abstract interface establishing a platform-neutral contract for enterprise test management platforms.
+  - **Xray Enterprise Provider (`XrayProvider` & `XrayClient`)**: Full support for Xray Cloud (OAuth2 Client Credentials, GraphQL, and REST v2) and Xray Server/Data Center (Raven API v1.0). Supports Test Cases, Test Plans, Test Sets, Execution Results Import, Defect Linkage, and Evidence Attachments.
+  - **Jira Native Quality Provider (`JiraProvider`)**: Unified test case specification via Jira issues with ADF formatting, workflow transitions, components, releases/versions, and defect linking.
+  - **Tricentis qTest Provider (`QTestProvider`)**: Full test design module mapping, test cases, test suites, test cycles, test runs, automated test logs, and defect submission.
+  - **Central Test Management Registry (`TestManagementRegistry`)**: Singleton registry mapping systems (`xray`, `jira`, `qtest`) to providers with capability advertising.
+- **Universal Quality Model & Bidirectional Adapters**:
+  - Expanded `UniversalModelAdapter` with bidirectional Xray conversion methods (`xray_test_to_canonical_test_case`, `canonical_test_case_to_xray_payload`, `canonical_execution_to_xray_result`, `xray_test_plan_to_canonical`).
+  - Added canonical models: `CanonicalTestSet`, `ExternalObjectMapping`, `SyncConflictPolicy`, `SyncJobStatus`.
+- **One Unified Bidirectional Sync Engine (`SyncEngine`)**:
+  - Enterprise synchronization engine supporting incremental sync, checkpoints, idempotency, bounded batching, and configurable conflict policies (`external_wins`, `skywatch_wins`, `manual_review`).
+  - Graceful partial failure handling capturing entity-level error details without breaking sync runs.
+- **Enterprise Tool Registry (`app/core/tool_registry.py`)**:
+  - Registered `tool.alm.xray` for autonomous agent interactions with Xray Cloud and Server.
+  - Registered `tool.alm.sync` for agentic test management synchronization and reconciliation.
+- **REST API Endpoints (`app/api/v1/integrations.py`)**:
+  - Added Xray endpoints: `GET /integrations/xray/tests`, `POST /integrations/xray/tests`, `POST /integrations/xray/plans`, `POST /integrations/xray/executions/import`.
+  - Added Field & Status Mapping endpoints: `GET /integrations/connections/{id}/mappings`, `PUT /integrations/connections/{id}/mappings`.
+  - Added Bidirectional Sync endpoint: `POST /integrations/connections/{id}/sync`.
+- **Frontend Quality Management Studio (`IntegrationConnectionsPanel.tsx`)**:
+  - Multi-connection management with first-class Xray connection cards, badges, and creation modal.
+  - Interactive **Field & Status Mappings** editor supporting configurable transform rules and status mappings.
+  - **Bidirectional Sync Engine Modal**: sync direction controls, conflict policy selector, entity filters, dry run simulation, and real-time execution statistics (synced, failed, conflicts, duration ms).
+- **Automated Verification**:
+  - Added unit test suites `backend/tests/test_test_management_providers.py` and `backend/tests/test_sync_engine.py`.
+  - Expanded `backend/tests/test_universal_quality_model.py` with Xray conversion test cases.
+  - Verified 100% pass across 38 backend tests and 24 frontend tests.
 
 ## [2.6.1] - 2026-09-20
 

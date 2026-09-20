@@ -30,6 +30,11 @@ from app.schemas.integration import (
     QTestBuildCreateRequest,
     QTestExportTestCaseRequest,
     QTestSubmitTestLogRequest,
+    SyncExecutionRequest,
+    SyncExecutionResponse,
+    XrayExecutionImportRequest,
+    XrayTestCreateRequest,
+    XrayTestPlanCreateRequest,
 )
 from app.services.audit import log_audit_event
 from app.services.integration_service import (
@@ -64,7 +69,7 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 
 def _load_owned_connection(db: DbSession, connection_id: int, user: User) -> IntegrationConnection:
-    for system, environment_id in (("jira", -1), ("qtest", -2)):
+    for system, environment_id in (("jira", -1), ("qtest", -2), ("xray", -3)):
         if connection_id == environment_id:
             connection = environment_connection(system)
             if connection:
@@ -874,3 +879,225 @@ def git_supported_frameworks() -> dict[str, Any]:
         "total": len(frameworks),
         "frameworks": frameworks,
     }
+
+
+# ============================================================================
+# Xray Enterprise Endpoints
+# ============================================================================
+
+@router.get("/xray/tests")
+async def get_xray_tests(
+    connection_id: int,
+    query: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Search and list tests from Xray Cloud or Server."""
+    from app.services.test_management.registry import test_management_registry
+    from app.services.integration_service import _credential_for
+
+    conn = _load_owned_connection(db, connection_id, user)
+    credential = _credential_for(conn)
+    provider = test_management_registry.get_provider(conn, credential)
+
+    try:
+        cases, total = await provider.search_test_cases(query=query, page=page, page_size=page_size)
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "tests": [c.model_dump() for c in cases],
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Xray test search failed: {exc}",
+        ) from exc
+
+
+@router.post("/xray/tests")
+async def create_xray_test(
+    payload: XrayTestCreateRequest,
+    connection_id: int = Query(...),
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Create a new test case in Xray."""
+    from app.services.test_management.registry import test_management_registry
+    from app.services.integration_service import _credential_for
+    from app.schemas.universal_quality_model import CanonicalTestCase, CanonicalTestStep
+
+    conn = _load_owned_connection(db, connection_id, user)
+    credential = _credential_for(conn)
+    provider = test_management_registry.get_provider(conn, credential)
+
+    steps = [
+        CanonicalTestStep(
+            step_number=idx,
+            action=s.get("action", "Action"),
+            expected_result=s.get("result", "Expected outcome"),
+        )
+        for idx, s in enumerate(payload.steps, start=1)
+    ]
+    canonical_case = CanonicalTestCase(
+        id=f"case-xray-new",
+        application_id=payload.project_key,
+        title=payload.summary,
+        description=payload.description,
+        steps=steps,
+        tags=payload.labels,
+    )
+    try:
+        created = await provider.create_test_case(canonical_case)
+        return {"status": "created", "test": created.model_dump()}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Xray test creation failed: {exc}",
+        ) from exc
+
+
+@router.post("/xray/plans")
+async def create_xray_plan(
+    payload: XrayTestPlanCreateRequest,
+    connection_id: int = Query(...),
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Create a new Test Plan in Xray."""
+    from app.services.test_management.registry import test_management_registry
+    from app.services.integration_service import _credential_for
+    from app.schemas.universal_quality_model import CanonicalTestPlan
+
+    conn = _load_owned_connection(db, connection_id, user)
+    credential = _credential_for(conn)
+    provider = test_management_registry.get_provider(conn, credential)
+
+    plan = CanonicalTestPlan(
+        id="plan-new",
+        project_id=payload.project_key,
+        name=payload.summary,
+        objective=payload.description,
+    )
+    try:
+        created = await provider.create_test_plan(plan)
+        if payload.test_keys:
+            await provider.associate_tests_to_plan(created.id, payload.test_keys)
+        return {"status": "created", "plan": created.model_dump()}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Xray plan creation failed: {exc}",
+        ) from exc
+
+
+@router.post("/xray/executions/import")
+async def import_xray_execution(
+    payload: XrayExecutionImportRequest,
+    connection_id: int = Query(...),
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Import test execution results into Xray."""
+    from app.services.test_management.registry import test_management_registry
+    from app.services.integration_service import _credential_for
+    from app.schemas.universal_quality_model import CanonicalExecutionResult, ExecutionStatus
+
+    conn = _load_owned_connection(db, connection_id, user)
+    credential = _credential_for(conn)
+    provider = test_management_registry.get_provider(conn, credential)
+
+    canonical_results = []
+    for idx, t in enumerate(payload.tests, start=1):
+        test_status = ExecutionStatus.PASSED if str(t.get("status")).upper() in ("PASSED", "PASS") else ExecutionStatus.FAILED
+        canonical_results.append(
+            CanonicalExecutionResult(
+                step_number=idx,
+                status=test_status,
+                duration_ms=float(t.get("duration", 100.0)),
+                error_message=t.get("comment"),
+                screenshot_url=t.get("testKey"),
+            )
+        )
+    exec_key = payload.info.get("testExecutionKey", f"{conn.project_key or 'PROJ'}-EXEC-1")
+    try:
+        res = await provider.import_execution_results(exec_key, canonical_results, payload.info)
+        return {"status": "imported", "result": res}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Xray execution import failed: {exc}",
+        ) from exc
+
+
+# ============================================================================
+# Field Mappings, Status Mappings & Bidirectional Sync Endpoints
+# ============================================================================
+
+@router.get("/connections/{connection_id}/mappings")
+def get_connection_mappings(
+    connection_id: int,
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Retrieve field and status mappings configured for an integration connection."""
+    conn = _load_owned_connection(db, connection_id, user)
+    meta = conn.last_metadata or {}
+    return {
+        "connection_id": conn.id,
+        "system": conn.system,
+        "field_mappings": meta.get("field_mappings", {}),
+        "status_mappings": meta.get("status_mappings", {}),
+    }
+
+
+@router.put("/connections/{connection_id}/mappings")
+def update_connection_mappings(
+    connection_id: int,
+    payload: dict[str, Any] = Body(...),
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Save field and status mappings for an integration connection."""
+    conn = _load_owned_connection(db, connection_id, user)
+    current_meta = dict(conn.last_metadata or {})
+    if "field_mappings" in payload:
+        current_meta["field_mappings"] = payload["field_mappings"]
+    if "status_mappings" in payload:
+        current_meta["status_mappings"] = payload["status_mappings"]
+
+    conn.last_metadata = current_meta
+    db.commit()
+    db.refresh(conn)
+    return {
+        "status": "updated",
+        "connection_id": conn.id,
+        "field_mappings": current_meta.get("field_mappings", {}),
+        "status_mappings": current_meta.get("status_mappings", {}),
+    }
+
+
+@router.post("/connections/{connection_id}/sync")
+async def execute_connection_sync(
+    connection_id: int,
+    request: SyncExecutionRequest,
+    db: DbSession = None,
+    user: User = Depends(current_user),
+) -> SyncExecutionResponse:
+    """Trigger on-demand bidirectional synchronization with external ALM platform."""
+    from app.services.test_management.sync_engine import sync_engine
+    from app.services.integration_service import _credential_for
+
+    conn = _load_owned_connection(db, connection_id, user)
+    credential = _credential_for(conn)
+
+    try:
+        response = await sync_engine.execute_sync(conn, credential, request)
+        return response
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Synchronization failed: {exc}",
+        ) from exc

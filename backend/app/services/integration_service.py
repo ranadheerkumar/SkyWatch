@@ -32,7 +32,7 @@ class IntegrationServiceError(RuntimeError):
     pass
 
 
-ENVIRONMENT_CONNECTION_IDS = {"jira": -1, "qtest": -2}
+ENVIRONMENT_CONNECTION_IDS = {"jira": -1, "qtest": -2, "xray": -3}
 INTEGRATION_ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 
@@ -200,12 +200,15 @@ def _credential_for(connection: IntegrationConnection) -> str:
     raise IntegrationServiceError("Integration credential is not configured")
 
 
-def _client_for(connection: IntegrationConnection) -> JiraClient | QTestClient:
+def _client_for(connection: IntegrationConnection) -> Any:
     credential = _credential_for(connection)
     if connection.system == "jira":
         return JiraClient(connection, credential)
     if connection.system == "qtest":
         return QTestClient(connection, credential)
+    if connection.system == "xray":
+        from app.services.test_management.xray_provider import XrayClient
+        return XrayClient(connection, credential)
     raise IntegrationServiceError(f"Unsupported integration system '{connection.system}'")
 
 

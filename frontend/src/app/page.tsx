@@ -32,6 +32,9 @@ import type {
   IntegrationEnvironmentConfig,
   IntegrationEnvironmentUpdate,
   IntegrationTestResult,
+  ConnectionMappings,
+  SyncExecutionRequest,
+  SyncExecutionResponse,
 } from "../components/IntegrationConnectionsPanel";
 import SortControl from "../components/SortControl";
 import type { SortOption } from "../components/SortControl";
@@ -2329,8 +2332,49 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
     if (!connection) throw new Error("Integration connection not found");
     const path = connection.system === "jira"
       ? `/api/v1/integrations/jira/${connectionId}/requirements`
+      : connection.system === "xray"
+      ? `/api/v1/integrations/xray/tests?connection_id=${connectionId}`
       : `/api/v1/integrations/qtest/${connectionId}/assets?asset_type=${encodeURIComponent(assetType)}`;
     return await apiFetch<IntegrationAssetResponse>(path, {}, token);
+  };
+
+  const handleSyncIntegrationConnection = async (connectionId: number, request: Partial<SyncExecutionRequest>): Promise<SyncExecutionResponse> => {
+    if (!token) throw new Error("Not authenticated");
+    return await apiFetch<SyncExecutionResponse>(
+      `/api/v1/integrations/connections/${connectionId}/sync`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          connection_id: connectionId,
+          direction: request.direction ?? "bidirectional",
+          entity_types: request.entity_types ?? ["test_case", "test_execution"],
+          conflict_policy: request.conflict_policy ?? "external_wins",
+          dry_run: request.dry_run ?? false,
+        }),
+      },
+      token,
+    );
+  };
+
+  const handleLoadConnectionMappings = async (connectionId: number): Promise<ConnectionMappings> => {
+    if (!token) throw new Error("Not authenticated");
+    return await apiFetch<ConnectionMappings>(
+      `/api/v1/integrations/connections/${connectionId}/mappings`,
+      {},
+      token,
+    );
+  };
+
+  const handleSaveConnectionMappings = async (connectionId: number, mappings: ConnectionMappings): Promise<ConnectionMappings> => {
+    if (!token) throw new Error("Not authenticated");
+    return await apiFetch<ConnectionMappings>(
+      `/api/v1/integrations/connections/${connectionId}/mappings`,
+      {
+        method: "PUT",
+        body: JSON.stringify(mappings),
+      },
+      token,
+    );
   };
 
   const handleUpdateIntegrationEnvironment = async (update: IntegrationEnvironmentUpdate): Promise<IntegrationEnvironmentConfig> => {
@@ -9073,6 +9117,9 @@ Example (Markdown Table):
         onSetActive: handleSetIntegrationConnectionActive,
         onLoadAssets: handleLoadIntegrationAssets,
         onUpdateEnvironment: handleUpdateIntegrationEnvironment,
+        onSync: handleSyncIntegrationConnection,
+        onLoadMappings: handleLoadConnectionMappings,
+        onSaveMappings: handleSaveConnectionMappings,
       }}
     />
     </div>

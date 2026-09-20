@@ -8373,8 +8373,20 @@ td.col-id,
   color: #1d4ed8;
 }
 
+.integration-system-badge.xray {
+  color: #0284c7;
+}
+
 .integration-system-badge.qtest {
   color: #047857;
+}
+
+.integration-system-badge.github {
+  color: #6366f1;
+}
+
+.integration-system-badge.gitlab {
+  color: #f97316;
 }
 
 .integration-status.active {
@@ -8479,6 +8491,170 @@ td.col-id,
   background: rgba(220, 38, 38, 0.08);
   color: var(--error-dark);
   font-size: var(--font-small);
+}
+
+.integration-sync-panel,
+.integration-mapping-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-16);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md, 8px);
+  margin-top: var(--space-16);
+}
+
+.integration-sync-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-16);
+}
+
+.integration-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  margin-top: var(--space-6);
+}
+
+.integration-checkbox-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--font-small);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.integration-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-12);
+  margin-top: var(--space-12);
+}
+
+.integration-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12);
+  background: var(--bg-layer-2);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm, 6px);
+  text-align: center;
+}
+
+.integration-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.integration-stat-value.success {
+  color: var(--success-dark);
+}
+
+.integration-stat-value.error {
+  color: var(--error-dark);
+}
+
+.integration-stat-value.warning {
+  color: var(--warning-dark);
+}
+
+.integration-stat-label {
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+  margin-top: var(--space-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.integration-mapping-tabs {
+  display: flex;
+  gap: var(--space-8);
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: var(--space-4);
+}
+
+.integration-mapping-tab {
+  padding: var(--space-8) var(--space-16);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.integration-mapping-tab:hover {
+  color: var(--text-primary);
+}
+
+.integration-mapping-tab.active {
+  color: var(--primary, #0284c7);
+  border-bottom-color: var(--primary, #0284c7);
+}
+
+.integration-mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-small);
+}
+
+.integration-mapping-table th,
+.integration-mapping-table td {
+  padding: var(--space-8) var(--space-12);
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.integration-mapping-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-layer-2);
+}
+
+.integration-mapping-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto;
+  gap: var(--space-8);
+  align-items: flex-end;
+  padding: var(--space-12);
+  background: var(--bg-layer-2);
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-sm, 6px);
+  margin-top: var(--space-12);
+}
+
+.integration-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.integration-badge-pill.completed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.integration-badge-pill.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.integration-badge-pill.in_progress {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
 }
 
 @media (max-width: 720px) {
