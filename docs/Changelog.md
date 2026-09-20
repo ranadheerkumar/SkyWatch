@@ -1,6 +1,22 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.6.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.6.1`.
+
+## [2.6.1] - 2026-09-20
+
+### Fixed & Enhanced
+- **Google Gemini Provider Connectivity & Modern Model Routing**:
+  - Resolved 404 model retirement error (`models/gemini-2.0-flash is no longer available`) by transitioning default configuration to `gemini-flash-latest` across `backend/.env`, `app/core/config.py`, `app/services/llm_client.py`, and `app/services/ai_service.py`.
+  - Added robust backward-compatible alias normalization mapping legacy identifiers (`gemini-2.0-flash`, `gemini-2.0`, `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-pro`, `gemini-1.5-flash`, `gemini-pro`, `gemini-flash`) to active endpoints `gemini-flash-latest` and `gemini-pro-latest`.
+  - Updated fallback model catalogs to `["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest", "gemini-3.6-flash"]`.
+  - Configured automatic `certifi` CA certificate bundle resolution (`SSL_CERT_FILE`) in `app/core/config.py` to prevent TLS handshake failures on macOS environments.
+  - Added explicit Google Cloud Project attributes (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_PROJECT_NUMBER`) to `Settings` and environment configuration.
+  - Verified live two-way connectivity against Google Gemini API with sub-second response latency (0.99s).
+- **Settings Studio Frontend**:
+  - Updated Google Gemini provider description to `Gemini Flash / Pro (Multimodal)`.
+  - Updated available model presets in `SettingsStudio.tsx` to include `gemini-flash-latest`, `gemini-pro-latest`, `gemini-flash-lite-latest`, and `gemini-3.6-flash`.
+- **Automated Verification**:
+  - Added `backend/tests/test_gemini_connectivity.py` covering settings resolution, SSL certificate file integrity, model alias normalization, and supported catalog definitions.
 
 ## [2.6.0] - 2026-09-20
 

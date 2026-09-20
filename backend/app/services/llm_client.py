@@ -74,8 +74,8 @@ def get_all_provider_statuses() -> list[dict[str, Any]]:
             "provider": "gemini",
             "name": "Google Gemini",
             "configured": bool(gemini_key),
-            "default_model": os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")),
-            "models": ["gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-1.5-flash"],
+            "default_model": os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-flash-latest")),
+            "models": ["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest", "gemini-3.6-flash"],
             "endpoint": os.getenv("GEMINI_BASE_URL", getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")),
         },
         {
@@ -156,8 +156,22 @@ def _resolve_provider_config(
             getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
         )
         api_key = gemini_key or api_key
-        if not model or model in {"gpt-4o", "gpt-4.1"}:
-            model = os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash"))
+        gemini_alias_map = {
+            "gemini-2.0-flash": "gemini-flash-latest",
+            "gemini-2.0": "gemini-flash-latest",
+            "gemini-2.5-flash": "gemini-flash-latest",
+            "gemini-2.5-pro": "gemini-pro-latest",
+            "gemini-2.5": "gemini-flash-latest",
+            "gemini-1.5-pro": "gemini-pro-latest",
+            "gemini-1.5-flash": "gemini-flash-latest",
+            "gemini-1.5": "gemini-flash-latest",
+            "gemini-pro": "gemini-pro-latest",
+            "gemini-flash": "gemini-flash-latest",
+        }
+        if model.lower() in gemini_alias_map:
+            model = gemini_alias_map[model.lower()]
+        elif not model or model in {"gpt-4o", "gpt-4.1"}:
+            model = os.getenv("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-flash-latest"))
 
     elif provider in {"github_copilot", "copilot", "github", "github_models"}:
         if not base_url or "openai.com" in base_url or "googleapis.com" in base_url:

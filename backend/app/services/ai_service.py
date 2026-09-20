@@ -1436,6 +1436,11 @@ def _build_gemini_settings(
         raise AIServiceError("Google Gemini API key is missing. Set GEMINI_API_KEY in backend/.env or AI & Settings.")
     model = _resolve_setting("GEMINI_MODEL", "AI_MODEL", default="gemini-flash-latest")
     gemini_alias_map = {
+        "gemini-2.0-flash": "gemini-flash-latest",
+        "gemini-2.0": "gemini-flash-latest",
+        "gemini-2.5-flash": "gemini-flash-latest",
+        "gemini-2.5-pro": "gemini-pro-latest",
+        "gemini-2.5": "gemini-flash-latest",
         "gemini-1.5-pro": "gemini-pro-latest",
         "gemini-1.5-flash": "gemini-flash-latest",
         "gemini-1.5": "gemini-flash-latest",
@@ -1497,10 +1502,10 @@ PROVIDER_FALLBACK_MODELS: dict[str, list[str]] = {
         "claude-3-opus-20240229",
     ],
     "gemini": [
-        "gemini-2.5-pro",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
+        "gemini-flash-latest",
+        "gemini-pro-latest",
+        "gemini-flash-lite-latest",
+        "gemini-3.6-flash",
     ],
     "local": [
         "llama3.2",
@@ -1688,6 +1693,11 @@ def _provider_settings_for_connection(
     target_model = model.strip() if model and model.strip() else resolved.model
     if normalized_provider in {"gemini", "google"} and target_model:
         gemini_alias_map = {
+            "gemini-2.0-flash": "gemini-flash-latest",
+            "gemini-2.0": "gemini-flash-latest",
+            "gemini-2.5-flash": "gemini-flash-latest",
+            "gemini-2.5-pro": "gemini-pro-latest",
+            "gemini-2.5": "gemini-flash-latest",
             "gemini-1.5-pro": "gemini-pro-latest",
             "gemini-1.5-flash": "gemini-flash-latest",
             "gemini-1.5": "gemini-flash-latest",

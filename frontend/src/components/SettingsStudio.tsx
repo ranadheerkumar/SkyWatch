@@ -326,7 +326,7 @@ export default function SettingsStudio({
     { id: "openai", name: "OpenAI API", description: "Direct OpenAI GPT-4o / GPT-4.1 endpoints" },
     { id: "azure_openai", name: "Azure OpenAI", description: "Enterprise Azure-hosted GPT models" },
     { id: "anthropic", name: "Anthropic Claude", description: "Claude 3.5 Sonnet / Haiku" },
-    { id: "gemini", name: "Google Gemini", description: "Gemini 1.5 Pro / Flash" },
+    { id: "gemini", name: "Google Gemini", description: "Gemini Flash / Pro (Multimodal)" },
     { id: "local", name: "Local LLM / vLLM", description: "Custom OpenAI-compatible inference servers" },
   ];
   const selectedProviderMeta = providers.find((provider) => provider.id === selectedProvider);
@@ -388,9 +388,8 @@ export default function SettingsStudio({
       setAvailableModels([
         { id: "gemini-flash-latest", name: "Gemini Flash Latest (Recommended)", family: "Google", description: "High-throughput multimodal flash model" },
         { id: "gemini-pro-latest", name: "Gemini Pro Latest", family: "Google", description: "Flagship multi-modal reasoning engine" },
-        { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", family: "Google", description: "High-speed multimodal flash reasoning" },
-        { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", family: "Google", description: "Mid-size multimodal model with 1M context" },
-        { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", family: "Google", description: "High-capacity reasoning engine with thinking capability" },
+        { id: "gemini-flash-lite-latest", name: "Gemini Flash Lite Latest", family: "Google", description: "Cost-optimized high-efficiency model" },
+        { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", family: "Google", description: "High-speed multimodal flash reasoning" },
       ]);
     } else {
       setAvailableModels([{ id: "gpt-4o", name: "GPT-4o", family: "Default", description: "Standard LLM model" }]);

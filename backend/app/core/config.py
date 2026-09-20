@@ -9,6 +9,13 @@ _root_dir = _backend_dir.parent
 load_dotenv(_root_dir / ".env")
 load_dotenv(_backend_dir / ".env")
 
+try:
+    import certifi
+    if not os.environ.get("SSL_CERT_FILE"):
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+except Exception:
+    pass
+
 
 def _resolve_database_url() -> str:
     raw_url = (
@@ -139,11 +146,13 @@ class Settings:
         or os.getenv("GOOGLE_API_KEY")
         or ""
     ).strip()
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip()
     GEMINI_BASE_URL: str = os.getenv(
         "GEMINI_BASE_URL",
         "https://generativelanguage.googleapis.com/v1beta/openai",
     ).strip().rstrip("/")
+    GOOGLE_CLOUD_PROJECT: str = os.getenv("GOOGLE_CLOUD_PROJECT", "projects/584367322531").strip()
+    GOOGLE_PROJECT_NUMBER: str = os.getenv("GOOGLE_PROJECT_NUMBER", "584367322531").strip()
 
     # Playwright & Multi-Environment Execution Settings
     EXECUTION_PROVIDER: str = os.getenv("SKYWATCH_EXECUTION_PROVIDER", os.getenv("EXECUTION_PROVIDER", "local")).strip().lower()
