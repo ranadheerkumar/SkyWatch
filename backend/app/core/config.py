@@ -170,6 +170,13 @@ class Settings:
     QTEST_DEFAULT_RELEASE_ID: str = os.getenv("QTEST_DEFAULT_RELEASE_ID", "").strip()
     INTEGRATIONS_WEBHOOK_SECRET: str = os.getenv("INTEGRATIONS_WEBHOOK_SECRET", "").strip()
 
+    # Git Provider Integration (GitHub / GitLab)
+    GITHUB_GIT_TOKEN: str = os.getenv("GITHUB_GIT_TOKEN", os.getenv("SKYWATCH_GIT_TOKEN", "")).strip()
+    GITHUB_GIT_REPO: str = os.getenv("GITHUB_GIT_REPO", os.getenv("SKYWATCH_GIT_REPO", "")).strip()
+    GITHUB_GIT_BRANCH: str = os.getenv("GITHUB_GIT_BRANCH", os.getenv("SKYWATCH_GIT_BRANCH", "")).strip()
+    GITHUB_GIT_BASE_PATH: str = os.getenv("GITHUB_GIT_BASE_PATH", os.getenv("SKYWATCH_GIT_BASE_PATH", "tests/skywatch/")).strip()
+    ENABLE_GIT_PUSH: bool = os.getenv("ENABLE_GIT_PUSH", os.getenv("SKYWATCH_ENABLE_GIT_PUSH", "true")).lower() in ("true", "1")
+
     # Queue & Worker Settings
     QUEUE_BACKEND: str = (os.getenv("SKYWATCH_QUEUE_BACKEND") or os.getenv("AI_QA_ENGINE_QUEUE_BACKEND", "local")).strip().lower()
     QUEUE_NAME: str = os.getenv("SKYWATCH_QUEUE_NAME", os.getenv("AI_QA_ENGINE_QUEUE_NAME", "skywatch-runs"))

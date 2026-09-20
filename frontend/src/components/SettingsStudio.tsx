@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 import { formatDuration } from "../lib/formatDuration";
 import IntegrationConnectionsPanel, { type IntegrationConnectionsPanelProps } from "./IntegrationConnectionsPanel";
 import AuditLogViewer, { type AuditEntry } from "./AuditLogViewer";
@@ -89,6 +90,86 @@ export default function SettingsStudio({
 
   const [testing, setTesting] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ status: string; message: string; latency_ms?: number } | null>(null);
+
+  // Git Repository Integration State
+  const [gitRepoInput, setGitRepoInput] = useState<string>("");
+  const [gitTesting, setGitTesting] = useState<boolean>(false);
+  const [gitTestResult, setGitTestResult] = useState<{
+    success: boolean;
+    message: string;
+    provider?: string;
+    repo?: string;
+    default_branch?: string;
+    permissions?: Record<string, boolean>;
+  } | null>(null);
+  const [gitReposLoading, setGitReposLoading] = useState<boolean>(false);
+  const [gitReposList, setGitReposList] = useState<
+    Array<{
+      full_name: string;
+      default_branch: string;
+      private: boolean;
+      html_url: string;
+      description?: string;
+    }>
+  >([]);
+  const [gitReposFetched, setGitReposFetched] = useState<boolean>(false);
+
+  const handleTestGitConnection = async () => {
+    if (!token) return;
+    setGitTesting(true);
+    setGitTestResult(null);
+    try {
+      const res = await apiFetch<{
+        success: boolean;
+        message: string;
+        provider?: string;
+        repo?: string;
+        default_branch?: string;
+        permissions?: Record<string, boolean>;
+      }>(
+        "/api/v1/integrations/git/test-connection",
+        {
+          method: "POST",
+          body: JSON.stringify({ repo: gitRepoInput.trim() || undefined }),
+        },
+        token
+      );
+      setGitTestResult(res);
+    } catch (err) {
+      setGitTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Git connection test failed",
+      });
+    } finally {
+      setGitTesting(false);
+    }
+  };
+
+  const handleFetchGitRepos = async () => {
+    if (!token) return;
+    setGitReposLoading(true);
+    try {
+      const res = await apiFetch<{
+        total: number;
+        repos: Array<{
+          full_name: string;
+          default_branch: string;
+          private: boolean;
+          html_url: string;
+          description?: string;
+        }>;
+      }>("/api/v1/integrations/git/repos", {}, token);
+      setGitReposList(res.repos || []);
+      setGitReposFetched(true);
+    } catch (err) {
+      setGitTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Failed to load repositories",
+      });
+    } finally {
+      setGitReposLoading(false);
+    }
+  };
 
   const providers = config?.supported_providers || [
     { id: "github_copilot", name: "GitHub Copilot / GitHub Models", description: "Direct GitHub Copilot API (GPT-4o, GPT-4.1, Claude Haiku 4.5, etc.)" },
@@ -616,7 +697,186 @@ export default function SettingsStudio({
 
       {/* Tab 2: Enterprise Integrations */}
       {activeTab === "integrations" && (
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Git Repository Integration Card */}
+          <div className="settings-studio-card" style={{ padding: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "8px",
+                    background: "#24292e",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "20px",
+                  }}
+                >
+                  🐙
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
+                    Git Repository Integration · GitHub REST API
+                  </h2>
+                  <p className="muted" style={{ margin: "2px 0 0", fontSize: "12px" }}>
+                    Commit compiled test scripts (Playwright, Cypress, Selenium, Robot Framework, Java TestNG, Jest + Puppeteer) directly to remote Git repositories with smart branch detection and atomic multi-file commits.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="secondary btn-sm"
+                  onClick={() => void handleFetchGitRepos()}
+                  disabled={gitReposLoading}
+                  title="List repositories accessible with the configured token"
+                >
+                  {gitReposLoading ? "Loading Repos..." : "📋 Browse Repos"}
+                </button>
+                <button
+                  type="button"
+                  className="primary btn-sm"
+                  onClick={() => void handleTestGitConnection()}
+                  disabled={gitTesting}
+                >
+                  {gitTesting ? "Testing Connection..." : "🔌 Test Git Connection"}
+                </button>
+              </div>
+            </div>
+
+            {/* Test Status Banner */}
+            {gitTestResult && (
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "10px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  background: gitTestResult.success ? "rgba(22, 163, 74, 0.12)" : "rgba(220, 38, 38, 0.12)",
+                  border: `1px solid ${gitTestResult.success ? "rgba(22, 163, 74, 0.3)" : "rgba(220, 38, 38, 0.3)"}`,
+                  color: gitTestResult.success ? "var(--success-dark, #15803d)" : "var(--error-dark, #b91c1c)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600 }}>
+                  <span>{gitTestResult.success ? "✅" : "❌"}</span>
+                  <span>{gitTestResult.message}</span>
+                </div>
+                {gitTestResult.success && gitTestResult.repo && (
+                  <div style={{ marginTop: "6px", fontSize: "11px", display: "flex", gap: "16px", flexWrap: "wrap", color: "var(--text-secondary)" }}>
+                    <span>Repository: <strong>{gitTestResult.repo}</strong></span>
+                    <span>Default Branch: <strong>{gitTestResult.default_branch || "main"}</strong></span>
+                    {gitTestResult.permissions && (
+                      <span>
+                        Permissions: Push: {gitTestResult.permissions.push ? "✅" : "❌"} | Pull: {gitTestResult.permissions.pull ? "✅" : "❌"} | Admin: {gitTestResult.permissions.admin ? "✅" : "❌"}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Config & Repos Grid */}
+            <div style={{ marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+              <div className="panel" style={{ padding: "12px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>
+                  Target Repository (owner/repo)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. your-org/test-automation"
+                  value={gitRepoInput}
+                  onChange={(e) => setGitRepoInput(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-light)",
+                    fontSize: "12px",
+                  }}
+                />
+                <span className="muted" style={{ fontSize: "11px", marginTop: "4px", display: "block" }}>
+                  Leave empty to test token against user profile, or specify a repository to verify write access.
+                </span>
+              </div>
+
+              <div className="panel" style={{ padding: "12px" }}>
+                <strong style={{ fontSize: "12px", display: "block", marginBottom: "4px" }}>
+                  Supported Export Frameworks
+                </strong>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>🎭 Playwright (TypeScript)</span>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>🌲 Cypress (JavaScript)</span>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>🐍 Selenium (Python)</span>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>🤖 Robot Framework</span>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>☕ Java TestNG</span>
+                  <span className="badge badge-secondary" style={{ fontSize: "11px" }}>🎪 Jest + Puppeteer</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Accessible Repos List (if loaded) */}
+            {gitReposFetched && (
+              <div style={{ marginTop: "14px" }}>
+                <strong style={{ fontSize: "12px", display: "block", marginBottom: "6px" }}>
+                  Accessible GitHub Repositories ({gitReposList.length})
+                </strong>
+                <div
+                  style={{
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "6px",
+                    background: "var(--bg-layer-2)",
+                  }}
+                >
+                  {gitReposList.length === 0 ? (
+                    <div style={{ padding: "12px", textAlign: "center", fontSize: "12px", color: "var(--text-secondary)" }}>
+                      No accessible repositories found for the configured token.
+                    </div>
+                  ) : (
+                    gitReposList.map((r) => (
+                      <div
+                        key={r.full_name}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "6px 10px",
+                          borderBottom: "1px solid var(--border-light)",
+                          fontSize: "12px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <button
+                            type="button"
+                            className="btn-xs secondary"
+                            onClick={() => setGitRepoInput(r.full_name)}
+                            title="Select this repository"
+                          >
+                            Select
+                          </button>
+                          <strong>{r.full_name}</strong>
+                          {r.private && (
+                            <span className="badge badge-secondary" style={{ fontSize: "10px", padding: "1px 4px" }}>
+                              private
+                            </span>
+                          )}
+                        </div>
+                        <span className="muted" style={{ fontSize: "11px" }}>
+                          default: {r.default_branch}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {integrations ? (
             <IntegrationConnectionsPanel {...integrations} />
           ) : (

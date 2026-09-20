@@ -1,6 +1,38 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.3.1`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.4.0`.
+
+## [2.4.0] - 2026-09-20
+
+### Added
+- **Enterprise Multi-Framework Script Generation Engine (`docs/SCRIPT_GENERATION_ENGINE.md`)**:
+  - Implemented decoupled script generation architecture using the Strategy and Registry pattern (`backend/app/services/script_generators/`).
+  - Added support for six industry-standard automation frameworks and languages:
+    1. **Playwright TypeScript** (`.spec.ts`): Async/await, auto-waiting locators, strict mode disambiguation.
+    2. **Cypress 13.x JavaScript** (`.cy.js`): Chained commands, `cy.visit()`, `cy.get().type()`, `.should('be.visible')`.
+    3. **Selenium 4 Python** (`.py`): `pytest` runner, `WebDriverWait` explicit waits, `By.*` locators, headless Chrome.
+    4. **Robot Framework** (`.robot`): SeleniumLibrary keywords, structured `*** Settings/Test Cases ***` blocks.
+    5. **Java TestNG + Selenium 4** (`.java`): `@Test/@BeforeMethod/@AfterMethod` lifecycle, `WebDriverWait`, explicit waits.
+    6. **Jest + Puppeteer** (`.test.js`): Headless Chromium automation with `page.goto()`, `page.type()`, `expect()` assertions.
+  - Added single-case export endpoint: `GET /api/v1/test-cases/{test_case_id}/export-script?framework={framework}`.
+  - Added multi-case suite export endpoint: `GET /api/v1/test-cases/application/{application_id}/export-script-suite?framework={framework}`.
+  - Added supported frameworks metadata catalog: `GET /api/v1/integrations/git/supported-frameworks`.
+  - Zero regression: legacy Playwright export endpoints (`export-playwright`, `export-playwright-suite`) and local file-saver (`git-push`) remain 100% operational.
+
+- **Remote GitHub REST API Git Integration & Smart Branch Strategy (`docs/GIT_INTEGRATION_GUIDE.md`)**:
+  - Implemented abstract `GitProvider` interface and `GitHubProvider` (`backend/app/services/git_providers/`).
+  - Added single-file remote commits via GitHub Contents API (`PUT /repos/{owner}/{repo}/contents/{path}`).
+  - Added atomic multi-file suite commits via Git Trees API (`POST /git/blobs` → `POST /git/trees` → `POST /git/commits` → `PATCH /git/refs`).
+  - Smart branch resolution hierarchy: explicitly requested branch → configured environment default (`GITHUB_GIT_BRANCH`) → remote repo default branch auto-detected via GitHub API → fallback branch (`skywatch/generated-tests`).
+  - Automatic target branch creation when target branch does not exist on remote.
+  - Strict token separation: `GITHUB_GIT_TOKEN` dedicated exclusively to Git operations, preventing cross-use with LLM client `GITHUB_TOKEN`.
+  - Added endpoints: `POST /api/v1/test-cases/{id}/git-commit`, `POST /api/v1/test-cases/application/{id}/git-commit-suite`, `POST /api/v1/integrations/git/test-connection`, `GET /api/v1/integrations/git/repos`.
+
+- **Frontend Script Studio & Settings Integration**:
+  - `ScriptStudio.tsx`: Interactive multi-framework code generator modal with framework tabs, single vs. suite toggle, live code preview, download, copy, and expandable GitHub commit drawer with instant commit SHA link.
+  - Integrated Script Studio triggers across Cases table (`⚡ Scripts`), Test Case Editor (`⚡ Script Studio`), and Application Toolbar (`⚡ Script Studio`).
+  - `SettingsStudio.tsx`: Added **Git Repository Integration (GitHub REST API)** card under Enterprise Integrations tab with token verification, repository browsing, and connection testing.
+  - Added comprehensive unit test suites: `frontend/src/components/ScriptStudio.test.ts`, `backend/tests/test_script_generators.py`, and `backend/tests/test_git_provider.py`.
 
 ## [2.3.1] - 2026-09-19
 

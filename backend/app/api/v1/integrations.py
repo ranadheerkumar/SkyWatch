@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import DbSession, current_user, require_roles
@@ -797,4 +797,80 @@ async def receive_qtest_webhook(
         "status": "received",
         "system": "qtest",
         "event_type": event_type,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Git Provider Integration
+# ---------------------------------------------------------------------------
+
+
+@router.post("/git/test-connection")
+async def git_test_connection(
+    user: User = Depends(require_roles("tester", "qa_lead", "admin")),
+    body: dict[str, Any] = Body(default={}),
+) -> dict[str, Any]:
+    """Test GitHub Git integration connectivity and repository access."""
+    from app.services.git_providers import get_git_provider
+
+    provider = get_git_provider("github")
+    result = await provider.verify_connection(repo=body.get("repo"))
+
+    return {
+        "success": result.success,
+        "message": result.message,
+        "provider": result.provider,
+        "repo": result.repo,
+        "default_branch": result.default_branch,
+        "permissions": result.permissions,
+    }
+
+
+@router.get("/git/repos")
+async def git_list_repos(
+    user: User = Depends(current_user),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(30, ge=1, le=100),
+) -> dict[str, Any]:
+    """List GitHub repositories accessible to the configured token."""
+    from app.services.git_providers import get_git_provider
+
+    provider = get_git_provider("github")
+    repos = await provider.list_repos(page=page, per_page=per_page)
+
+    return {
+        "total": len(repos),
+        "page": page,
+        "per_page": per_page,
+        "repos": [
+            {
+                "full_name": r.full_name,
+                "default_branch": r.default_branch,
+                "private": r.private,
+                "html_url": r.html_url,
+                "description": r.description,
+            }
+            for r in repos
+        ],
+    }
+
+
+@router.get("/git/supported-frameworks")
+def git_supported_frameworks() -> dict[str, Any]:
+    """List all supported script generation frameworks."""
+    from app.services.script_generators import FRAMEWORK_REGISTRY
+
+    frameworks = []
+    for key, gen_cls in FRAMEWORK_REGISTRY.items():
+        gen = gen_cls()
+        frameworks.append({
+            "id": key,
+            "name": gen.framework_name(),
+            "language": gen.language(),
+            "file_extension": gen.file_extension(),
+        })
+
+    return {
+        "total": len(frameworks),
+        "frameworks": frameworks,
     }

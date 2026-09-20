@@ -69,6 +69,7 @@ import type {
   RuntimeParameter,
   RunStatusSnapshot,
   RunSummary,
+  ScriptFramework,
   Section,
   TestCase,
   TestCaseAutomationReadiness,
@@ -93,6 +94,7 @@ const CompleteBuildReportPanel = dynamic(() => import("../components/CompleteBui
 const AutonomousAuditsStudio = dynamic(() => import("../components/AutonomousAuditsStudio"));
 const ObservabilityMetricsCard = dynamic(() => import("../components/ObservabilityMetricsCard"));
 const GenerationLogViewer = dynamic(() => import("../components/GenerationLogViewer"));
+const ScriptStudio = dynamic(() => import("../components/ScriptStudio"));
 import type { GenerationLogItem } from "../components/GenerationLogViewer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -411,6 +413,32 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
   } | null>(null);
   const [fetchingPlaywrightSuite, setFetchingPlaywrightSuite] = useState(false);
   const [selectedSuiteSpecIndex, setSelectedSuiteSpecIndex] = useState(0);
+
+  // Enterprise Multi-framework Script Studio state
+  const [scriptStudioOpen, setScriptStudioOpen] = useState(false);
+  const [scriptStudioTestCaseId, setScriptStudioTestCaseId] = useState<number | null>(null);
+  const [scriptStudioTestCaseTitle, setScriptStudioTestCaseTitle] = useState<string>("Test Case");
+  const [scriptStudioApplicationId, setScriptStudioApplicationId] = useState<number | null>(null);
+  const [scriptStudioApplicationName, setScriptStudioApplicationName] = useState<string>("Application");
+  const [scriptStudioFramework, setScriptStudioFramework] = useState<ScriptFramework>("playwright");
+  const [scriptStudioMode, setScriptStudioMode] = useState<"single" | "suite">("single");
+
+  const openScriptStudio = (options: {
+    testCaseId?: number | null;
+    testCaseTitle?: string;
+    applicationId?: number | null;
+    applicationName?: string;
+    initialFramework?: ScriptFramework;
+    initialMode?: "single" | "suite";
+  }) => {
+    setScriptStudioTestCaseId(options.testCaseId ?? null);
+    setScriptStudioTestCaseTitle(options.testCaseTitle ?? "Test Case");
+    setScriptStudioApplicationId(options.applicationId ?? null);
+    setScriptStudioApplicationName(options.applicationName ?? "Application");
+    if (options.initialFramework) setScriptStudioFramework(options.initialFramework);
+    setScriptStudioMode(options.initialMode ?? (options.testCaseId ? "single" : "suite"));
+    setScriptStudioOpen(true);
+  };
 
   // Background AI generation job tracking across navigation
   const [activeAiJobId, setActiveAiJobId] = useState<string | null>(() => {
@@ -6544,6 +6572,20 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
             </button>
             <button
               type="button"
+              className="secondary"
+              onClick={() => openScriptStudio({
+                applicationId: app?.id,
+                applicationName: app?.name,
+                initialMode: "suite",
+              })}
+              disabled={!hasSelectedApplication}
+              title="Enterprise Script Studio: Export suite in Playwright, Cypress, Selenium, Robot, Java, Puppeteer & Push to GitHub"
+              style={{ color: "#1f3a5f", fontWeight: 700 }}
+            >
+              ⚡ Script Studio
+            </button>
+            <button
+              type="button"
               className="secondary btn-danger"
               onClick={() => void clearDraftCases()}
               disabled={!hasSelectedApplication || selectedCases.length === 0 || clearingDrafts}
@@ -6931,6 +6973,21 @@ export default function HomePage({ initialSection }: { initialSection?: Section 
                         style={{ color: "var(--brand-primary, #b5121b)", fontWeight: 700 }}
                       >
                         💻 Spec
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openScriptStudio({
+                          testCaseId: caseItem.id,
+                          testCaseTitle: caseItem.title,
+                          applicationId: selectedAppId,
+                          applicationName: app?.name,
+                          initialMode: "single",
+                        })}
+                        className="row-action-btn"
+                        title="Enterprise Script Studio (Playwright, Cypress, Selenium, Robot, Java, Puppeteer & GitHub)"
+                        style={{ color: "#1f3a5f", fontWeight: 700 }}
+                      >
+                        ⚡ Scripts
                       </button>
                       <button
                         type="button"
@@ -7330,6 +7387,22 @@ Example (Markdown Table):
         </div>
       )}
 
+      {/* Enterprise Multi-Framework Script Studio Modal */}
+      {scriptStudioOpen && (
+        <ScriptStudio
+          isOpen={scriptStudioOpen}
+          onClose={() => setScriptStudioOpen(false)}
+          token={token}
+          testCaseId={scriptStudioTestCaseId}
+          testCaseTitle={scriptStudioTestCaseTitle}
+          applicationId={scriptStudioApplicationId}
+          applicationName={scriptStudioApplicationName}
+          onNotify={notify}
+          initialFramework={scriptStudioFramework}
+          initialMode={scriptStudioMode}
+        />
+      )}
+
       {testCaseEditorMode !== null && (
         <div
           className="projects-modal-overlay"
@@ -7471,6 +7544,25 @@ Example (Markdown Table):
                       title="View & export TypeScript Playwright spec code"
                     >
                       💻 Playwright Spec
+                    </button>
+                  )}
+                  {testCaseEditingId && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        openScriptStudio({
+                          testCaseId: testCaseEditingId,
+                          testCaseTitle: testCaseFormTitle || "Test Case",
+                          applicationId: selectedAppId,
+                          applicationName: app?.name,
+                          initialMode: "single",
+                        });
+                      }}
+                      style={{ color: "#1f3a5f", fontWeight: 700 }}
+                      title="Enterprise Script Studio (Playwright, Cypress, Selenium, Robot, Java, Puppeteer & GitHub)"
+                    >
+                      ⚡ Script Studio
                     </button>
                   )}
                   {testCaseEditingId && (

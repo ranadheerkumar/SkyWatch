@@ -147,4 +147,37 @@ Always keep `.github/copilot-instructions.md` synchronized and updated as new fe
   - High-Density Filter Toolbars: All listing and analytics pages must use single-row compact filter toolbars (38px-40px height) rather than tall stacked form grids.
   - Executive Header Strips: Page hero banners must remain sleek (max 48px-52px height) with inline right-aligned primary actions to maximize above-the-fold data visibility.
   - Settings & Audits Hierarchy: Tab navigation must always be positioned at the top of the workspace.
-
+- Enterprise Multi-Framework Script Generation Engine (`docs/SCRIPT_GENERATION_ENGINE.md`):
+  - Abstract `ScriptGenerator` strategy pattern and `FRAMEWORK_REGISTRY` (`backend/app/services/script_generators/`) decoupling the step/check IR from syntax generation.
+  - Six enterprise automation frameworks and languages supported:
+    1. `playwright`: Playwright TypeScript (`.spec.ts`, async/await, auto-waiting locators, strict mode disambiguation).
+    2. `cypress`: Cypress 13.x JavaScript (`.cy.js`, chained `cy.get().type()`, `cy.visit()`, `.should('be.visible')`).
+    3. `selenium_python`: Selenium 4 Python (`.py`, `pytest` fixtures, `WebDriverWait`, `By.*` locators, Chrome headless).
+    4. `robot`: Robot Framework (`.robot`, SeleniumLibrary keywords, `*** Settings/Test Cases ***`).
+    5. `java_testng`: Java TestNG + Selenium 4 (`.java`, `@Test/@BeforeMethod/@AfterMethod`, `WebDriverWait`, explicit waits).
+    6. `jest_puppeteer`: Jest + Puppeteer JavaScript (`.test.js`, `page.goto()`, `page.type()`, `expect()` matchers).
+  - API Endpoints Contract:
+    - `GET /api/v1/test-cases/{test_case_id}/export-script?framework={framework}`: Single-case script export in requested framework.
+    - `GET /api/v1/test-cases/application/{application_id}/export-script-suite?framework={framework}`: Multi-case suite export for entire application.
+    - `GET /api/v1/integrations/git/supported-frameworks`: Dynamic catalog of supported frameworks, extensions, and metadata.
+  - Backward Compatibility & Zero Regression: Existing Playwright export endpoints (`export-playwright`, `export-playwright-suite`) and local file-saver (`git-push`) remain 100% functional and unmodified.
+- Remote GitHub REST API Git Integration & Smart Branch Strategy (`docs/GIT_INTEGRATION_GUIDE.md`):
+  - Abstract `GitProvider` interface and `GIT_PROVIDER_REGISTRY` (`backend/app/services/git_providers/`).
+  - Remote GitHub commit execution:
+    - Single-file commits via Contents API (`PUT /repos/{owner}/{repo}/contents/{path}`).
+    - Atomic multi-file suite commits via Git Trees API (`POST /git/blobs` → `POST /git/trees` → `POST /git/commits` → `PATCH /git/refs`).
+  - Smart Branch Resolution Strategy:
+    1. Explicit requested branch (API payload or ScriptStudio input).
+    2. Environment default branch (`GITHUB_GIT_BRANCH`).
+    3. Remote repository default branch auto-detected via GitHub REST API (`GET /repos/{owner}/{repo}`).
+    4. Fallback default (`skywatch/generated-tests`).
+    5. Automatic branch creation: If target branch does not exist, automatically created from repo's default branch.
+  - Strict Token Separation: `GITHUB_GIT_TOKEN` is dedicated exclusively to Git repository operations (repo scope). Never cross-use `GITHUB_TOKEN`, which is reserved exclusively for the LLM client.
+  - Endpoints:
+    - `POST /api/v1/test-cases/{test_case_id}/git-commit`: Remote single-case commit with framework selection.
+    - `POST /api/v1/test-cases/application/{application_id}/git-commit-suite`: Remote atomic suite commit.
+    - `POST /api/v1/integrations/git/test-connection`: Token, repo access, and permission verification (admin/push/pull).
+    - `GET /api/v1/integrations/git/repos`: List accessible repositories for token.
+- Frontend Script Studio & Settings Integration:
+  - `ScriptStudio.tsx`: Interactive multi-framework code generator modal with framework tabs (Playwright, Cypress, Selenium, Robot, Java, Puppeteer), single vs. suite toggle, live code preview, copy, download, and expandable GitHub Commit drawer with SHA link.
+  - `SettingsStudio.tsx`: Git Repository Integration card under Enterprise Integrations tab with token status, repo selector, connection testing, and accessible repository browsing.

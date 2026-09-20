@@ -530,6 +530,262 @@ def export_playwright_suite(application_id: int, db: DbSession, user: User = Dep
     }
 
 
+@router.get("/{test_case_id}/export-script")
+def export_script(
+    test_case_id: int,
+    db: DbSession,
+    user: User = Depends(current_user),
+    framework: str = Query("playwright", description="Target framework: playwright, cypress, selenium_python, robot, java_testng, jest_puppeteer"),
+) -> dict[str, Any]:
+    """Generate a test script in any supported framework."""
+    from app.services.script_generators import generate_script, SUPPORTED_FRAMEWORKS
+
+    if framework.lower().strip() not in SUPPORTED_FRAMEWORKS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported framework '{framework}'. Supported: {', '.join(SUPPORTED_FRAMEWORKS)}",
+        )
+
+    test_case = (
+        db.query(TestCase)
+        .join(Application, Application.id == TestCase.application_id)
+        .filter(TestCase.id == test_case_id, Application.created_by == user.id)
+        .first()
+    )
+    if not test_case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test case not found")
+    application = db.get(Application, test_case.application_id)
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    automation = db.get(TestCaseAutomation, test_case.id)
+    steps = automation.steps if automation else None
+    checks = automation.checks if automation else None
+
+    output = generate_script(framework, test_case, application, steps=steps, checks=checks)
+
+    return {
+        "test_case_id": test_case.id,
+        "title": test_case.title,
+        "filename": output.filename,
+        "code": output.code,
+        "framework": output.framework,
+        "language": output.language,
+        "file_extension": output.file_extension,
+    }
+
+
+@router.get("/application/{application_id}/export-script-suite")
+def export_script_suite(
+    application_id: int,
+    db: DbSession,
+    user: User = Depends(current_user),
+    framework: str = Query("playwright", description="Target framework: playwright, cypress, selenium_python, robot, java_testng, jest_puppeteer"),
+) -> dict[str, Any]:
+    """Bulk-generate scripts for all test cases in an application."""
+    from app.services.script_generators import generate_script, SUPPORTED_FRAMEWORKS
+
+    if framework.lower().strip() not in SUPPORTED_FRAMEWORKS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported framework '{framework}'. Supported: {', '.join(SUPPORTED_FRAMEWORKS)}",
+        )
+
+    application = db.query(Application).filter(Application.id == application_id, Application.created_by == user.id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    cases = db.query(TestCase).filter(TestCase.application_id == application_id).order_by(TestCase.id.asc()).all()
+    scripts = []
+    for tc in cases:
+        automation = db.get(TestCaseAutomation, tc.id)
+        steps = automation.steps if automation else None
+        checks = automation.checks if automation else None
+        output = generate_script(framework, tc, application, steps=steps, checks=checks)
+        scripts.append({
+            "test_case_id": tc.id,
+            "title": tc.title,
+            "filename": output.filename,
+            "code": output.code,
+            "framework": output.framework,
+            "language": output.language,
+        })
+
+    return {
+        "application_id": application.id,
+        "application_name": application.name,
+        "framework": framework,
+        "total_scripts": len(scripts),
+        "scripts": scripts,
+    }
+
+
+@router.post("/{test_case_id}/git-commit")
+async def git_commit_script(
+    test_case_id: int,
+    db: DbSession,
+    user: User = Depends(require_roles("tester", "qa_lead", "admin")),
+    body: dict[str, Any] = Body(default={}),
+) -> dict[str, Any]:
+    """Commit a generated test script to a remote GitHub repository.
+
+    Body parameters (all optional):
+        framework: str — target framework (default: playwright)
+        repo: str — GitHub owner/repo (default: env GITHUB_GIT_REPO)
+        branch: str — target branch (default: smart detection)
+        base_path: str — directory prefix (default: env GITHUB_GIT_BASE_PATH)
+        commit_message: str — custom commit message
+    """
+    from app.services.script_generators import generate_script, SUPPORTED_FRAMEWORKS
+    from app.services.git_providers import get_git_provider, GitFile
+
+    framework = body.get("framework", "playwright")
+    if framework.lower().strip() not in SUPPORTED_FRAMEWORKS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported framework '{framework}'. Supported: {', '.join(SUPPORTED_FRAMEWORKS)}",
+        )
+
+    test_case = (
+        db.query(TestCase)
+        .join(Application, Application.id == TestCase.application_id)
+        .filter(TestCase.id == test_case_id, Application.created_by == user.id)
+        .first()
+    )
+    if not test_case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test case not found")
+    application = db.get(Application, test_case.application_id)
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    automation = db.get(TestCaseAutomation, test_case.id)
+    steps = automation.steps if automation else None
+    checks = automation.checks if automation else None
+
+    output = generate_script(framework, test_case, application, steps=steps, checks=checks)
+
+    provider = get_git_provider("github")
+    commit_message = body.get("commit_message") or f"SkyWatch: Add {output.framework} test — {test_case.title}"
+
+    try:
+        result = await provider.commit_files(
+            repo=body.get("repo"),
+            branch=body.get("branch"),
+            files=[GitFile(path=output.filename, content=output.code)],
+            message=commit_message,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"GitHub commit failed: {exc}",
+        )
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="test_case.git_commit",
+        resource_type="test_case",
+        resource_id=test_case.id,
+        metadata={
+            "framework": framework,
+            "filename": output.filename,
+            "repo": body.get("repo") or "",
+            "branch": result.branch,
+            "sha": result.sha,
+        },
+    )
+    db.commit()
+
+    return {
+        "test_case_id": test_case.id,
+        "framework": output.framework,
+        "filename": output.filename,
+        "sha": result.sha,
+        "url": result.url,
+        "branch": result.branch,
+        "path": result.file_paths[0] if result.file_paths else output.filename,
+        "status": "committed",
+    }
+
+
+@router.post("/application/{application_id}/git-commit-suite")
+async def git_commit_suite(
+    application_id: int,
+    db: DbSession,
+    user: User = Depends(require_roles("tester", "qa_lead", "admin")),
+    body: dict[str, Any] = Body(default={}),
+) -> dict[str, Any]:
+    """Batch-commit all test scripts for an application as a single atomic commit."""
+    from app.services.script_generators import generate_script, SUPPORTED_FRAMEWORKS
+    from app.services.git_providers import get_git_provider, GitFile
+
+    framework = body.get("framework", "playwright")
+    if framework.lower().strip() not in SUPPORTED_FRAMEWORKS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported framework '{framework}'. Supported: {', '.join(SUPPORTED_FRAMEWORKS)}",
+        )
+
+    application = db.query(Application).filter(Application.id == application_id, Application.created_by == user.id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    cases = db.query(TestCase).filter(TestCase.application_id == application_id).order_by(TestCase.id.asc()).all()
+    if not cases:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No test cases found for this application")
+
+    git_files: list[GitFile] = []
+    for tc in cases:
+        automation = db.get(TestCaseAutomation, tc.id)
+        steps = automation.steps if automation else None
+        checks = automation.checks if automation else None
+        output = generate_script(framework, tc, application, steps=steps, checks=checks)
+        git_files.append(GitFile(path=output.filename, content=output.code))
+
+    provider = get_git_provider("github")
+    commit_message = body.get("commit_message") or f"SkyWatch: Add {len(git_files)} {framework} tests for {application.name}"
+
+    try:
+        result = await provider.commit_files(
+            repo=body.get("repo"),
+            branch=body.get("branch"),
+            files=git_files,
+            message=commit_message,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"GitHub batch commit failed: {exc}",
+        )
+
+    log_audit_event(
+        db,
+        user_id=user.id,
+        action="test_suite.git_commit",
+        resource_type="application",
+        resource_id=application.id,
+        metadata={
+            "framework": framework,
+            "files_committed": result.files_committed,
+            "branch": result.branch,
+            "sha": result.sha,
+        },
+    )
+    db.commit()
+
+    return {
+        "application_id": application.id,
+        "application_name": application.name,
+        "framework": framework,
+        "files_committed": result.files_committed,
+        "sha": result.sha,
+        "url": result.url,
+        "branch": result.branch,
+        "file_paths": result.file_paths,
+        "status": "committed",
+    }
+
+
 @router.post("/{test_case_id}/git-push")
 def git_push_test_spec(test_case_id: int, db: DbSession, user: User = Depends(require_roles("tester", "qa_lead", "admin"))) -> dict[str, Any]:
     from pathlib import Path
@@ -2089,7 +2345,7 @@ def generate_sample_test_cases(
 	application = db.query(Application).filter(Application.id == application_id, Application.created_by == user.id).first()
 	if not application:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
-	
+
 	# Comprehensive test cases template for real-world application testing
 	sample_cases = [
 		# Authentication & Access Control
@@ -2276,7 +2532,7 @@ def generate_sample_test_cases(
 			"status": "draft",
 		},
 	]
-	
+
 	created_cases = []
 	for case_data in sample_cases:
 		test_case = TestCase(
@@ -2291,7 +2547,7 @@ def generate_sample_test_cases(
 		)
 		db.add(test_case)
 		created_cases.append(test_case)
-	
+
 	log_audit_event(
 		db,
 		user_id=user.id,
@@ -2303,5 +2559,5 @@ def generate_sample_test_cases(
 	db.commit()
 	for case in created_cases:
 		db.refresh(case)
-	
+
 	return created_cases

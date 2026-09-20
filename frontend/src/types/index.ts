@@ -493,3 +493,64 @@ export type ApplicationWorkspaceRow = {
 
 export type ProjectDetailTab = "overview" | "applications" | "cases" | "runs" | "results" | "insights";
 export type ApplicationDetailTab = "overview" | "discovery";
+
+export type ScriptFramework =
+	| "playwright"
+	| "cypress"
+	| "selenium_python"
+	| "robot"
+	| "java_testng"
+	| "jest_puppeteer";
+
+export type FrameworkInfo = {
+	id: string;
+	name: string;
+	language: string;
+	file_extension: string;
+};
+
+export type ScriptOutput = {
+	test_case_id: number;
+	title: string;
+	filename: string;
+	code: string;
+	framework: string;
+	language: string;
+};
+
+export type ScriptSuiteOutput = {
+	application_id: number;
+	application_name: string;
+	framework: string;
+	language: string;
+	total_cases: number;
+	scripts: ScriptOutput[];
+};
+
+export type GitCommitResult = {
+	sha: string;
+	url: string;
+	branch: string;
+	path?: string;
+	filename?: string;
+	files_committed?: number;
+	file_paths?: string[];
+	repo?: string;
+};
+
+export type GitConnectionStatus = {
+	success: boolean;
+	message: string;
+	provider?: string;
+	repo?: string;
+	default_branch?: string;
+	permissions?: Record<string, boolean>;
+};
+
+export type GitRepo = {
+	full_name: string;
+	default_branch: string;
+	private: boolean;
+	html_url: string;
+	description?: string;
+};
