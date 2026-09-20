@@ -1,6 +1,38 @@
 # Changelog
 
-All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.4.0`.
+All notable changes to the SkyWatch Autonomous Quality Assurance Platform are recorded here. The current version is `2.5.0`.
+
+## [2.5.0] - 2026-09-20
+
+### Added
+- **SkyWatch Master Architectural Charter Codification (`docs/MASTER_ARCHITECTURE.md`)**:
+  - Formalized the 50-point platform charter transforming SkyWatch into a general-purpose enterprise quality engineering, test management, automation, reporting, and agentic AI platform.
+  - Inscribed durable architectural rules, capability-based design, provider neutrality, and the Golden Rule into `.github/copilot-instructions.md`.
+- **Central Capability Registry (`backend/app/core/capabilities.py`)**:
+  - Implemented `PlatformCapability` enum and `CapabilityRegistry` covering 18+ canonical quality capabilities (`UI_BROWSER_AUTOMATION`, `API_AUTOMATION`, `MOBILE_AUTOMATION`, `DATABASE_VALIDATION`, `PERFORMANCE_TESTING`, `ACCESSIBILITY_TESTING`, `SECURITY_TESTING`, `VISUAL_TESTING`, `TEST_DATA_GENERATION`, `REQUIREMENT_ANALYSIS`, `TEST_GENERATION`, `TEST_EXECUTION`, `FAILURE_ANALYSIS`, `REPORTING`, `DEFECT_CREATION`, `SOURCE_CONTROL`, `CI_CD`, `CLOUD_STORAGE`, `SECRET_MANAGEMENT`).
+  - Added capability discovery API endpoints: `GET /api/v1/capabilities` and `GET /api/v1/capabilities/taxonomy`.
+- **Enterprise Standardized Tool Registry (`backend/app/core/tool_registry.py`)**:
+  - Standardized tool metadata contract with explicit tool IDs, schemas, permissions, environments, platforms, authentication requirements, timeouts, and retry policies.
+  - Implemented tool registry with built-in adapters for Multi-Framework Script Gen, GitHub Git Provider, REST API Testing, Test Data Synthesis, Document Analysis, Allure Reporting, Jira ALM, and qTest ALM.
+  - Added tool introspection API endpoints: `GET /api/v1/tools` and `GET /api/v1/tools/{tool_id}`.
+- **Universal Quality Model & Adapters (`backend/app/schemas/universal_quality_model.py`)**:
+  - Created platform-neutral domain models: `CanonicalOrganization`, `CanonicalTeam`, `CanonicalProject`, `CanonicalApplication`, `CanonicalEnvironment`, `CanonicalRequirement`, `CanonicalTestPlan`, `CanonicalTestSuite`, `CanonicalTestCase`, `CanonicalTestStep`, `CanonicalTestData`, `CanonicalTestRun`, `CanonicalTestExecution`, `CanonicalExecutionResult`, `CanonicalDefect`, `CanonicalEvidence`, `CanonicalReport`.
+  - Implemented bidirectional ingestion and egress adapters (`UniversalModelAdapter`) for Jira Cloud (ADF v1), Tricentis qTest SaaS, and Git commit traceability.
+- **Cloud Abstraction & Provider Layer (`backend/app/services/cloud_providers/`)**:
+  - Created abstract `StorageProvider` and `SecretProvider` interfaces with factory resolution (`get_storage_provider()`, `get_secret_provider()`).
+  - Implemented `LocalStorageProvider` and `LocalEnvSecretProvider` for zero-cloud local development and CI.
+  - Implemented pluggable adapters for Azure (`AzureBlobStorageProvider`, `AzureKeyVaultSecretProvider`), GCP (`GCPStorageProvider`, `GCPSecretManagerProvider`), and AWS (`AWSS3StorageProvider`, `AWSSecretsManagerProvider`).
+- **Dynamic Capability Orchestrator (`backend/app/services/capability_orchestrator.py`)**:
+  - Implemented dynamic agentic orchestration loop: User Objective → Context → Capability Discovery → Tool Selection → Execution Plan.
+  - Added REST endpoints: `POST /api/v1/orchestrator/agentic-plan` and `POST /api/v1/orchestrator/agentic-execute`.
+- **Frontend Platform Capabilities & Tool Explorer (`frontend/src/components/SettingsStudio.tsx`)**:
+  - Added dedicated **⚡ Capabilities & Tools** tab in Settings Studio with live capability registry grid, standardized tool catalog, cloud portability indicators, and interactive dynamic agentic orchestration sandbox.
+- **Comprehensive Automated Test Suites**:
+  - Added `backend/tests/test_capability_registry.py` (6 tests).
+  - Added `backend/tests/test_enterprise_tool_registry.py` (6 tests).
+  - Added `backend/tests/test_universal_quality_model.py` (4 tests).
+  - Added `backend/tests/test_cloud_providers.py` (3 tests).
+  - Added `backend/tests/test_capability_orchestrator.py` (3 tests).
 
 ## [2.4.0] - 2026-09-20
 

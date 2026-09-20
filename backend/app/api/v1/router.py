@@ -6,6 +6,7 @@ from app.api.v1.ai_generation import router as ai_generation_router
 from app.api.v1.applications import router as applications_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.capabilities import router as capabilities_router
 from app.api.v1.defects import router as defects_router
 from app.api.v1.evidence import router as evidence_router
 from app.api.v1.execution import router as execution_router
@@ -23,6 +24,7 @@ from app.api.v1.test_suites import router as test_suites_router
 
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(capabilities_router)
 api_router.include_router(auth_router)
 api_router.include_router(orchestrator_router)
 api_router.include_router(observability_router)
